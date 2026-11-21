@@ -110,3 +110,53 @@ for door in doors:
     else:
         print("Height: Not available")
 
+
+
+# Compare door instances and door types
+print("\nDOOR INSTANCE VS TYPE ANALYSIS")
+
+door_types = list(
+    DB.FilteredElementCollector(doc)
+    .OfCategory(DB.BuiltInCategory.OST_Doors)
+    .WhereElementIsElementType()
+)
+
+print("Total door instances: {}".format(len(doors)))
+print("Total available door types: {}".format(len(door_types)))
+
+# Identify types actually used in the model
+used_type_ids = set()
+
+for door in doors:
+    type_id = door.GetTypeId()
+
+    if type_id != DB.ElementId.InvalidElementId:
+        used_type_ids.add(type_id)
+
+print("Total used door types: {}".format(len(used_type_ids)))
+
+# Display unique used types
+print("\nUNIQUE DOOR TYPES")
+
+for type_id in used_type_ids:
+
+    door_type = doc.GetElement(type_id)
+
+    if not door_type:
+        continue
+
+    # Retrieve type name using a built-in parameter
+    name_param = door_type.get_Parameter(
+        DB.BuiltInParameter.SYMBOL_NAME_PARAM
+    )
+
+    if name_param and name_param.HasValue:
+        type_name = name_param.AsString()
+    else:
+        type_name = "Unknown type"
+
+    print("Type ID: {} | Name: {}".format(
+        type_id,
+        type_name
+    ))
+
