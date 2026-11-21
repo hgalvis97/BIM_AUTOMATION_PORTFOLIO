@@ -58,3 +58,55 @@ if doors:
                 param.Definition.Name,
                 param.StorageType
             ))
+
+# Extract door dimensions
+print("\nDOOR DIMENSION EXPLORER")
+
+for door in doors:
+
+    # Get the door type
+    door_type = doc.GetElement(door.GetTypeId())
+
+    if not door_type:
+        continue
+
+    # Get dimension parameters
+    width_param = door_type.get_Parameter(
+        DB.BuiltInParameter.DOOR_WIDTH
+    )
+
+    height_param = door_type.get_Parameter(
+        DB.BuiltInParameter.DOOR_HEIGHT
+    )
+
+    # Display element information
+    print("-------------------------")
+    print("Element ID: {}".format(door.Id))
+    print("Type: {}".format(door.Name))
+
+    # Convert width to millimeters
+    if width_param and width_param.HasValue:
+        width_ft = width_param.AsDouble()
+
+        width_mm = DB.UnitUtils.ConvertFromInternalUnits(
+            width_ft,
+            DB.UnitTypeId.Millimeters
+        )
+
+        print("Width: {:.2f} mm".format(width_mm))
+    else:
+        print("Width: Not available")
+
+    # Convert height to millimeters
+    if height_param and height_param.HasValue:
+        height_ft = height_param.AsDouble()
+
+        height_mm = DB.UnitUtils.ConvertFromInternalUnits(
+            height_ft,
+            DB.UnitTypeId.Millimeters
+        )
+
+        print("Height: {:.2f} mm".format(height_mm))
+    else:
+        print("Height: Not available")
+
