@@ -1,0 +1,52 @@
+﻿# ====================================
+# BIM AUTOMATION PORTFOLIO
+# Git Ignore Configuration
+# ====================================
+
+# Revit models and backups
+*.rvt
+*.rfa
+*.rte
+*.rft
+*.rvt.*
+*.slog
+*.dat
+
+# Revit backup folders
+*_backup/
+*_backup/**
+
+# Revit temporary files
+*.tmp
+*.bak
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# IDE settings
+.vs/
+.vscode/
+.idea/
+
+# Operating system
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Keep sample model directories
+# but ignore Revit files inside
+!**/sample-model/.gitkeep
