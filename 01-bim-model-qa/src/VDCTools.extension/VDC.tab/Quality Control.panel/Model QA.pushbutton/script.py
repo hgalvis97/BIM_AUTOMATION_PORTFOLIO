@@ -41,3 +41,20 @@ if doors:
             param.Definition.Name,
             param.StorageType
         ))
+
+# Explore type parameters
+if doors:
+    first_door = doors[0]
+
+    type_id = first_door.GetTypeId()
+    door_type = doc.GetElement(type_id)
+
+    if door_type:
+        print("\nTYPE PARAMETER EXPLORER")
+        print("Type ID: {}".format(type_id))
+
+        for param in door_type.Parameters:
+            print("{} | {}".format(
+                param.Definition.Name,
+                param.StorageType
+            ))
