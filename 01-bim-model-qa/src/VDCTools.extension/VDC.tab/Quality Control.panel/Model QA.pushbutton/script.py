@@ -16,3 +16,10 @@ doors = list(
 # Display results
 print("Model: {}".format(doc.Title))
 print("Total doors: {}".format(len(doors)))
+
+
+# Inspect individual door elements
+for door in doors:
+    print("Element ID: {}".format(door.Id))
+    print("Name: {}".format(door.Name))
+    print("-------------------------")
