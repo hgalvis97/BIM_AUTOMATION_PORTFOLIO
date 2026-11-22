@@ -150,43 +150,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-    doors = collect_doors(doc)
-
-    print("Model: {}".format(doc.Title))
-    print("Total doors: {}".format(len(doors)))
-
-    print("\nPARAMETER EXTRACTION TEST")
-
-    for door in doors[:5]:
-
-        # Read instance Mark
-        mark = get_string_parameter(
-            door,
-            DB.BuiltInParameter.ALL_MODEL_MARK
-        )
-
-        # Retrieve the door type
-        door_type = doc.GetElement(door.GetTypeId())
-
-        width_mm = None
-        height_mm = None
-
-        if door_type:
-            width_mm = get_dimension_mm(
-                door_type,
-                DB.BuiltInParameter.DOOR_WIDTH
-            )
-
-            height_mm = get_dimension_mm(
-                door_type,
-                DB.BuiltInParameter.DOOR_HEIGHT
-            )
-
-        print("-------------------------")
-        print("Element ID: {}".format(door.Id))
-        print("Mark: {}".format(mark))
-        print("Width: {} mm".format(width_mm))
-        print("Height: {} mm".format(height_mm))
-
+    
 
 
