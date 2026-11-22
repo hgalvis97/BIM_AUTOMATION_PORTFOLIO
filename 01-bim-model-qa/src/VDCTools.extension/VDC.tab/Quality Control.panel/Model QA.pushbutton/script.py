@@ -110,45 +110,80 @@ def extract_door_data(door, document):
     return door_data
 
 
+# Validate door data against BIM quality rules
+def validate_doors(all_door_data):
+
+    issues = []
+
+    for door_data in all_door_data:
+
+        element_id = door_data["element_id"]
+        mark = door_data["mark"]
+
+        # Rule 01: Missing Door Mark
+        if mark is None or not mark.strip():
+
+            issue = {
+                "element_id": element_id,
+                "rule": "Missing Mark",
+                "severity": "ERROR",
+                "description": "Door Mark is empty or missing"
+            }
+
+            issues.append(issue)
+
+    return issues
+
+
+
 def main():
 
     # Step 1: Collect door instances
     doors = collect_doors(doc)
 
-    # Step 2: Extract structured door data
+    # Step 2: Extract structured data
     all_door_data = []
 
     for door in doors:
         data = extract_door_data(door, doc)
         all_door_data.append(data)
 
-    # Step 3: Display extraction results
-    print("BIM MODEL QA - DATA EXTRACTION")
+    # Step 3: Validate door data
+    issues = validate_doors(all_door_data)
+
+    # Step 4: Display validation results
+    print("BIM MODEL QA - VALIDATION REPORT")
     print("Model: {}".format(doc.Title))
     print("Total doors: {}".format(len(all_door_data)))
+    print("Total issues: {}".format(len(issues)))
 
-    for data in all_door_data:
+    print("\nQA ISSUES")
 
-        print("---------------------------")
-        print("Element ID: {}".format(data["element_id"]))
-        print("Mark: {}".format(data["mark"]))
-        print("Type: {}".format(data["type_name"]))
+    if not issues:
+        print("PASS - No missing Mark issues found.")
 
-        width = data["width_mm"]
-        height = data["height_mm"]
+    else:
+        for issue in issues:
+            print("-------------------------")
+            print("Element ID: {}".format(
+                issue["element_id"]
+            ))
+            print("Rule: {}".format(
+                issue["rule"]
+            ))
+            print("Severity: {}".format(
+                issue["severity"]
+            ))
+            print("Description: {}".format(
+                issue["description"]
+            ))
 
-        if width is not None:
-            print("Width: {:.2f} mm".format(width))
-        else:
-            print("Width: Not available")
-
-        if height is not None:
-            print("Height: {:.2f} mm".format(height))
-        else:
-            print("Height: Not available")
 
 if __name__ == "__main__":
     main()
+
+
+
 
     
 
