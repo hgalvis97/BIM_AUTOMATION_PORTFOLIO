@@ -375,7 +375,7 @@ def generate_report(document, all_door_data, issues):
             issue["rule"]
         ))
 
-        print("<br/>")
+        print("")
 
     output.print_md(
         "---\n"
