@@ -1,260 +1,138 @@
-# BIM Model QA Checker
+# BIM Automation Portfolio
 
-**Automated BIM Quality Control using Python, pyRevit, and the Autodesk Revit API**
+### Python | Autodesk Revit API | pyRevit | Digital Construction
 
-![Duplicate Mark Detection](screenshots/14-duplicate-mark-detection.png)
+A collection of practical BIM automation projects focused on improving model data quality, reducing repetitive tasks, and connecting Building Information Modeling (BIM) with software development and data-driven construction workflows.
 
-## 1. Project Overview
+This portfolio documents my development of automation tools using Python, the Autodesk Revit API, and pyRevit.
 
-BIM Model QA Checker is a custom pyRevit extension designed to automate basic quality assurance checks on architectural door elements in Autodesk Revit.
-
-The tool extracts BIM element information, applies predefined validation rules, and generates an interactive report directly inside Revit.
-
-This project demonstrates practical knowledge of Python, the Revit API, BIM data structures, and automation workflows used in Architecture, Engineering, and Construction (AEC).
-
-**Project Type:** BIM Automation / Quality Assurance  
-**Software:** Autodesk Revit 2024  
-**Development Environment:** Visual Studio Code  
-**Technologies:** Python, IronPython, pyRevit, Autodesk Revit API  
-**Status:** Functional prototype — tested in Revit 2024
-
-## 2. Problem Statement
-
-BIM models contain large amounts of structured information that must remain accurate and consistent throughout the project lifecycle.
-
-Manually reviewing element parameters can be time-consuming, particularly in larger models.
-
-Common data quality concerns include:
-
-- Missing element identification values.
-- Duplicate door identification marks.
-- Unavailable dimensional information.
-- Invalid numerical parameter values.
-
-BIM Model QA Checker automates an initial review of these conditions and provides a structured report to support further model inspection.
-
-## 3. Features
-
-### Automated Door Data Extraction
-
-Uses `FilteredElementCollector` to retrieve door instances from the active Revit document.
-
-The tool extracts:
-
-| Parameter | Description |
-|---|---|
-| Element ID | Unique identifier within the Revit document |
-| Type ID | Reference to the associated door type |
-| Mark | Instance identification parameter |
-| Type Name | Name of the associated door type |
-| Width | Door width converted to millimeters |
-| Height | Door height converted to millimeters |
-
-### BIM Quality Validation
-
-Four quality assurance rules are implemented:
-
-| Rule | Severity | Description |
-|---|---|---|
-| Missing Mark | ERROR | Identifies doors with empty or missing Mark values |
-| Duplicate Mark | WARNING | Detects repeated Mark values across door instances |
-| Missing Dimensions | REVIEW | Flags dimensions unavailable through the queried parameters |
-| Invalid Dimensions | ERROR | Identifies zero or negative width or height values |
-
-Duplicate Mark detection uses normalized strings to account for differences in capitalization and surrounding spaces.
-
-**Note:** Duplicate marks may be acceptable depending on project naming conventions. Likewise, missing dimension parameter values do not necessarily indicate missing physical geometry.
-
-### Interactive QA Report
-
-The tool generates a report containing:
-
-- Model identification and door inventory.
-- Total findings grouped by severity.
-- Tabulated door information.
-- Quality assurance findings.
-- Clickable element links for locating issues in Revit.
-
-The tool performs read-only operations and does not modify the BIM model.
-
-## 4. Technical Architecture
-
-The application follows a modular workflow:
-
-```text
-Autodesk Revit Model
-        |
-        v
-collect_doors()
-        |
-        v
-extract_door_data()
-        |
-        v
-validate_doors()
-        |
-        v
-generate_report()
-        |
-        v
-Interactive pyRevit Output
-```
-
-### Main Functions
-
-| Function | Responsibility |
-|---|---|
-| `collect_doors()` | Retrieves door instances using the Revit API |
-| `get_string_parameter()` | Safely retrieves text parameters |
-| `get_dimension_mm()` | Reads length parameters and converts internal units |
-| `extract_door_data()` | Converts Revit elements into structured Python dictionaries |
-| `validate_doors()` | Executes BIM quality validation rules |
-| `get_severity_counts()` | Aggregates findings by severity |
-| `generate_report()` | Produces formatted tables and interactive element links |
-| `main()` | Coordinates execution |
-
-### Key Technical Concepts
-
-**Revit API integration:** Uses `Autodesk.Revit.DB` classes through pyRevit to access document elements and parameters.
-
-**Instance and type parameters:** Retrieves instance-specific values such as Mark and shared type parameters such as door dimensions.
-
-**Unit conversion:** Uses `UnitUtils.ConvertFromInternalUnits()` to convert Revit internal length units into millimeters.
-
-**Structured data processing:** Stores extracted element data in Python dictionaries and applies validation rules without repeatedly querying the Revit model.
-
-**IronPython compatibility:** Uses Python syntax compatible with the configured IronPython environment, including `.format()` for string formatting.
-
-## 5. Repository Structure
-
-```text
-01-bim-model-qa/
-|
-|-- src/
-|   |-- VDCTools.extension/
-|       |-- VDC.tab/
-|           |-- Quality Control.panel/
-|               |-- Model QA.pushbutton/
-|                   |-- script.py
-|                   |-- icon.png
-|
-|-- screenshots/
-|-- sample-model/
-|-- docs/
-|-- README.md
-```
-
-The Autodesk Revit sample model is maintained locally and excluded from version control using `.gitignore`.
-
-## 6. Installation
-
-### Requirements
-
-- Autodesk Revit 2024 (tested with Revit 2024.3).
-- pyRevit installed and attached to Revit.
-- Windows operating system.
-- An architectural Revit model containing door elements.
-
-### Setup Instructions
-
-1. Clone or download this repository.
-2. Open Autodesk Revit.
-3. Navigate to the pyRevit settings.
-4. Add the directory containing `VDCTools.extension` to **Custom Extension Directories**. For this repository, that directory is `01-bim-model-qa/src`.
-5. Save the configuration and reload pyRevit.
-6. Locate the new **VDC** tab.
-7. Open a Revit project and click **Model QA** in the **Quality Control** panel.
-
-The tool automatically analyzes door elements in the active document.
-
-## 7. Testing and Results
-
-The prototype was developed and tested using Autodesk's architectural sample project in Revit 2024.
-
-### Test Environment
-
-| Property | Result |
-|---|---|
-| Revit Version | 2024.3 |
-| pyRevit Version | 7.1 |
-| Model | Autodesk architectural sample project |
-| Door Instances | 16 |
-| Available Door Types | 5 |
-| Used Door Types | 5 |
-
-### Test 1 — Missing Mark Detection
-
-A door Mark value was temporarily cleared in a separate test copy of the model.
-
-**Result:** The validation function successfully identified the missing value and generated an ERROR finding.
-
-### Test 2 — Duplicate Mark Detection
-
-Two door instances were assigned the same Mark value, `206A`.
-
-**Result:** The tool successfully generated WARNING findings for both affected elements.
-
-![Duplicate Mark Validation](screenshots/14-duplicate-mark-detection.png)
-
-### Test 3 — Interactive Issue Navigation
-
-The QA report generated interactive element references through pyRevit's output functionality, enabling users to locate affected elements.
-
-### Testing Scope
-
-Missing Mark and Duplicate Mark detection were verified through controlled model changes.
-
-Dimension extraction was tested across multiple door types. Missing Dimensions and Invalid Dimensions remain implemented validation rules, but require additional targeted testing before being considered fully verified.
-
-## 8. Limitations
-
-This project is an initial proof of concept and has the following limitations:
-
-- Only the Doors category is currently analyzed.
-- Duplicate Mark validation does not distinguish between building levels, phases, or project-specific naming conventions.
-- Some door families may store dimensions in custom parameters or geometry not covered by the current extraction methods.
-- Missing parameter values do not necessarily indicate invalid model geometry.
-- The current report is displayed inside pyRevit and is not yet exported to Excel, CSV, or external reporting systems.
-- Automated regression testing is not yet implemented.
-
-The tool is intended to support BIM quality review, not replace project-specific BIM standards or professional model coordination.
-
-## 9. Future Improvements
-
-Potential enhancements include:
-
-- Support for Rooms, Windows, Walls, and additional BIM categories.
-- Configurable QA rules and severity levels.
-- Improved dimensional parameter detection.
-- CSV and Excel report exports.
-- Model quality indicators and aggregated dashboards.
-- Automated tests for validation functions.
-- Integration with BIM coordination and data analytics workflows.
-
-## 10. Skills Demonstrated
-
-This project demonstrates foundational competencies in:
-
-- BIM data extraction and validation.
-- Autodesk Revit API programming.
-- pyRevit extension development.
-- Python functions and data structures.
-- Object-oriented API navigation.
-- Parameter and unit handling.
-- Defensive programming and error handling.
-- Debugging IronPython integration issues.
-- Git version control and iterative development.
-- Technical documentation.
-
-## 11. References
-
-- [Autodesk Revit API Documentation](https://www.revitapidocs.com/2024/)
-- [pyRevit Documentation](https://docs.pyrevitlabs.io/)
-- [pyRevit GitHub Repository](https://github.com/pyrevitlabs/pyRevit)
-- [Autodesk Revit Sample Project Files](https://help.autodesk.com/cloudhelp/2024/ENU/Revit-GetStarted/files/GUID-61EF2F22-3A1F-4317-B925-1E85F138BE88.htm)
+**Focus Areas:** BIM Automation · VDC · AEC Technology · Data Analytics · Construction Technology
 
 ---
 
-**BIM Automation Portfolio — Project 01**
+## Projects
 
-*Exploring practical applications of Python, BIM data, and automation in the AEC industry.*
+### 01 — BIM Model QA Checker
+
+**Status: Functional prototype — Tested in Revit 2024**
+
+A custom pyRevit tool that analyzes door elements, extracts BIM parameters, identifies data quality issues, and generates an interactive quality assurance report.
+
+![BIM QA Checker — Duplicate Mark Detection](01-bim-model-qa/screenshots/14-duplicate-mark-detection.png)
+
+**Key Features**
+- Automated collection of door instances using `FilteredElementCollector`.
+- Extraction of instance and type parameters.
+- Automatic conversion of dimensional values to millimeters.
+- Detection of missing Marks, duplicate Marks, missing dimensions, and invalid dimensions.
+- Interactive QA reports with element navigation links.
+- Read-only model analysis.
+
+**Technologies:** Python, IronPython, pyRevit, Autodesk Revit API
+
+**Verified Results**
+- 16 door instances analyzed in an Autodesk sample model.
+- 5 distinct door types identified.
+- Missing Mark detection tested through controlled model changes.
+- Duplicate Mark detection verified using two door instances sharing Mark `206A`.
+
+[View Project Documentation](01-bim-model-qa/README.md) | [Explore Source Code](01-bim-model-qa/src/VDCTools.extension/VDC.tab/Quality%20Control.panel/Model%20QA.pushbutton/script.py)
+
+---
+
+### 02 — Batch Parameter Editor
+
+**Status: Planned**
+
+A Revit automation tool designed to modify instance parameters across multiple selected elements through controlled API transactions.
+
+**Planned Features**
+- Multi-element selection.
+- Parameter validation.
+- Batch parameter updates.
+- Revit API transaction handling.
+- Operation summaries and error reporting.
+
+**Technologies:** Python, pyRevit, Autodesk Revit API
+
+---
+
+### 03 — BIM Quantity Extractor
+
+**Status: Planned**
+
+A BIM data extraction tool designed to collect model quantities, group elements by family and type, and prepare structured datasets for external analysis.
+
+**Planned Features**
+- Model quantity extraction.
+- Element grouping and aggregation.
+- Structured data export.
+- CSV reporting for Excel and Power BI workflows.
+
+**Technologies:** Python, Revit API, CSV, Data Analytics
+
+---
+
+## Technology Stack
+
+| Technology | Application |
+|---|---|
+| Python | Automation logic and data processing |
+| Autodesk Revit API | Accessing and modifying BIM model data |
+| pyRevit | Custom Revit extensions and user interfaces |
+| IronPython | Python execution within the configured pyRevit environment |
+| Autodesk Revit 2024 | BIM development and testing |
+| Visual Studio Code | Code development |
+| Git & GitHub | Version control and project documentation |
+
+## Development Approach
+
+Each project follows a structured development workflow:
+
+1. **Problem Identification** — Define a practical BIM or construction workflow problem.
+2. **API Exploration** — Identify the relevant Revit elements, classes, and parameters.
+3. **Development** — Implement Python automation using reusable functions.
+4. **Validation** — Test functionality against sample BIM models.
+5. **Documentation** — Record the implementation, results, limitations, and future improvements.
+
+The objective is to develop tools that solve practical problems while demonstrating an understanding of the underlying BIM data structures and software engineering concepts.
+
+## Repository Structure
+
+```text
+BIM_AUTOMATION_PORTFOLIO/
+|
+|-- 01-bim-model-qa/
+|   |-- src/
+|   |-- screenshots/
+|   |-- sample-model/
+|   |-- README.md
+|
+|-- README.md
+|-- .gitignore
+```
+
+Projects 02 and 03 will be added as development progresses.
+
+Revit project files and local development artifacts are excluded from version control.
+
+## Professional Interests
+
+My interests lie at the intersection of civil engineering, construction operations, programming, and data analytics.
+
+I am particularly interested in applying automation and digital technologies to improve BIM coordination, construction productivity, information management, and decision-making in the Architecture, Engineering, and Construction (AEC) industry.
+
+This portfolio represents practical, hands-on learning and the progressive development of technical skills in BIM automation and VDC.
+
+## References
+
+- [Autodesk Revit API Documentation](https://www.revitapidocs.com/2024/)
+- [Autodesk Revit API Developer Guide](https://help.autodesk.com/cloudhelp/2024/ENU/Revit-API/files/Revit_API_Developers_Guide/Revit_API_Revit_API_Developers_Guide_html.html)
+- [pyRevit Documentation](https://docs.pyrevitlabs.io/)
+- [pyRevit GitHub Repository](https://github.com/pyrevitlabs/pyRevit)
+
+---
+
+**BIM Automation Portfolio**
+
+*From construction experience to practical digital solutions.*
