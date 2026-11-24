@@ -5,29 +5,25 @@
 BATCH PARAMETER EDITOR
 BIM Automation Portfolio - Project 02
 
-Features:
+Milestone 04:
+- Automatic discovery of editable instance text parameters
+- Common parameter detection across selected elements
 - Built-in Comments batch editing
 - Built-in Mark single-element editing
-- Custom instance text parameter editing
-- Parameter validation and change preview
-- User confirmation
-- Atomic Revit transaction
-- Rollback attempt on execution failure
-- Detailed execution report
+- Preview and confirmation
+- Atomic transactions and rollback handling
+- Detailed execution reporting
 
 Environment: Revit 2024.3, pyRevit 7.1, IronPython
 """
 
 from pyrevit import revit, DB, forms, script
 
-PARAMETER_OPTIONS = [
-    "Comments - Batch editing",
-    "Mark - Single element",
-    "Custom text parameter - Batch editing"
-]
+COMMENTS_ID = DB.BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS
+MARK_ID = DB.BuiltInParameter.ALL_MODEL_MARK
 
 def get_selected_elements(document, uidocument):
-    """Collect elements from the active Revit selection."""
+    """Return elements from the active Revit selection."""
 
     elements = []
 
@@ -39,11 +35,179 @@ def get_selected_elements(document, uidocument):
 
     return elements
 
-def choose_parameter(elements):
-    """Ask the user which instance text parameter to edit."""
+def is_supported_instance(element):
+    """Reject element types and grouped elements."""
+
+    if isinstance(element, DB.ElementType):
+        return False
+
+    if element.GroupId != DB.ElementId.InvalidElementId:
+        return False
+
+    return True
+
+def get_discoverable_parameters(element, document):
+    """Return supported document-defined instance text parameters."""
+
+    discovered = {}
+
+    if not is_supported_instance(element):
+        return discovered
+
+    for parameter in element.Parameters:
+
+        if parameter.StorageType != DB.StorageType.String:
+            continue
+
+        if parameter.IsReadOnly:
+            continue
+
+        parameter_id = parameter.Id.IntegerValue
+
+        # Built-in parameters have negative IDs.
+        # They are not offered through automatic discovery.
+        if parameter_id <= 0:
+            continue
+
+        definition_element = document.GetElement(parameter.Id)
+
+        # Only expose parameters with a document-level
+        # ParameterElement definition.
+        if not isinstance(definition_element, DB.ParameterElement):
+            continue
+
+        parameter_name = parameter.Definition.Name
+
+        if parameter_name:
+            discovered[parameter_id] = parameter_name
+
+    return discovered
+
+def discover_common_parameters(elements, document):
+    """Find editable parameters common to all eligible instances."""
+
+    eligible = [
+        element for element in elements
+        if is_supported_instance(element)
+    ]
+
+    if not eligible:
+        return []
+
+    common = get_discoverable_parameters(
+        eligible[0], document
+    )
+
+    for element in eligible[1:]:
+
+        current = get_discoverable_parameters(
+            element, document
+        )
+
+        common_ids = set(common.keys()).intersection(
+            set(current.keys())
+        )
+
+        common = {
+            parameter_id: common[parameter_id]
+            for parameter_id in common_ids
+            if common[parameter_id] == current[parameter_id]
+        }
+
+    result = []
+
+    for parameter_id, name in common.items():
+        result.append({
+            "name": name,
+            "mode": "discovered",
+            "id": parameter_id
+        })
+
+    return sorted(
+        result,
+        key=lambda item: (
+            item["name"].lower(),
+            item["id"]
+        )
+    )
+
+def builtin_is_editable(element, builtin_id):
+    """Check whether an instance built-in text parameter is writable."""
+
+    if not is_supported_instance(element):
+        return False
+
+    parameter = element.get_Parameter(builtin_id)
+
+    return (
+        parameter is not None
+        and parameter.StorageType == DB.StorageType.String
+        and not parameter.IsReadOnly
+    )
+
+def choose_parameter(elements, document):
+    """Build and display the available parameter choices."""
+
+    eligible = [
+        element for element in elements
+        if is_supported_instance(element)
+    ]
+
+    if not eligible:
+        forms.alert(
+            "No supported instance elements were selected.",
+            title="Batch Parameter Editor"
+        )
+        return None
+
+    options = {}
+
+    comments_available = all(
+        builtin_is_editable(element, COMMENTS_ID)
+        for element in eligible
+    )
+
+    if comments_available:
+        label = "Comments [Built-in | Batch]"
+        options[label] = {
+            "name": "Comments",
+            "mode": "builtin",
+            "id": COMMENTS_ID
+        }
+
+    # Mark must be edited on exactly one selected instance.
+    if len(elements) == 1 and builtin_is_editable(
+        elements[0], MARK_ID
+    ):
+        label = "Mark [Built-in | Single element]"
+        options[label] = {
+            "name": "Mark",
+            "mode": "builtin",
+            "id": MARK_ID
+        }
+
+    discovered = discover_common_parameters(
+        elements, document
+    )
+
+    for item in discovered:
+
+        label = "{} [Parameter ID: {}]".format(
+            item["name"],
+            item["id"]
+        )
+
+        options[label] = item
+
+    if not options:
+        forms.alert(
+            "No compatible editable text parameters were found.",
+            title="Batch Parameter Editor"
+        )
+        return None
 
     selected = forms.SelectFromList.show(
-        PARAMETER_OPTIONS,
+        sorted(options.keys()),
         title="Batch Parameter Editor - Select Parameter",
         button_name="Continue",
         multiselect=False
@@ -52,61 +216,13 @@ def choose_parameter(elements):
     if selected is None:
         return None
 
-    if selected == PARAMETER_OPTIONS[0]:
-        return {
-            "name": "Comments",
-            "mode": "builtin",
-            "id": DB.BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS
-        }
-
-    if selected == PARAMETER_OPTIONS[1]:
-
-        if len(elements) != 1:
-            forms.alert(
-                "Mark editing is restricted to one selected "
-                "element at a time.",
-                title="Batch Parameter Editor"
-            )
-            return None
-
-        return {
-            "name": "Mark",
-            "mode": "builtin",
-            "id": DB.BuiltInParameter.ALL_MODEL_MARK
-        }
-
-    if selected == PARAMETER_OPTIONS[2]:
-
-        parameter_name = forms.ask_for_string(
-            default="",
-            prompt="Enter the exact instance parameter name:",
-            title="Custom Text Parameter"
-        )
-
-        if parameter_name is None:
-            return None
-
-        parameter_name = parameter_name.strip()
-
-        if not parameter_name:
-            forms.alert(
-                "Parameter name cannot be empty.",
-                title="Batch Parameter Editor"
-            )
-            return None
-
-        return {
-            "name": parameter_name,
-            "mode": "custom",
-            "id": None
-        }
-
-    return None
+    return options[selected]
 
 def get_target_parameter(element, config):
-    """Resolve a supported instance parameter."""
+    """Resolve the exact target parameter on an instance."""
 
     if config["mode"] == "builtin":
+
         parameter = element.get_Parameter(config["id"])
 
         if parameter is None:
@@ -114,35 +230,37 @@ def get_target_parameter(element, config):
 
         return parameter, None
 
-    # GetParameters returns all parameters matching this name.
-    # Reject ambiguous matches rather than editing the wrong one.
-    parameters = list(
-        element.GetParameters(config["name"])
+    matches = []
+
+    for parameter in element.Parameters:
+        if parameter.Id.IntegerValue == config["id"]:
+            matches.append(parameter)
+
+    if len(matches) != 1:
+        return None, "Missing or ambiguous parameter identity"
+
+    parameter = matches[0]
+
+    if parameter.Id.IntegerValue <= 0:
+        return None, "Built-in parameter is not supported here"
+
+    if parameter.Definition.Name != config["name"]:
+        return None, "Parameter definition mismatch"
+
+    definition_element = element.Document.GetElement(
+        parameter.Id
     )
 
-    if len(parameters) == 0:
-        return None, "Custom parameter not found"
-
-    if len(parameters) > 1:
-        return None, "Ambiguous parameter name"
-
-    parameter = parameters[0]
-
-    # Built-in parameters must be selected explicitly.
-    # This prevents bypassing the single-element Mark rule.
-    if parameter.Id.IntegerValue < 0:
-        return None, "Use the built-in parameter option"
+    if not isinstance(definition_element, DB.ParameterElement):
+        return None, "Unsupported parameter definition"
 
     return parameter, None
 
 def validate_element(element, config, new_value):
-    """Validate one element before modification."""
+    """Validate an element and the selected parameter."""
 
-    if isinstance(element, DB.ElementType):
-        return None, "Element type is not supported"
-
-    if element.GroupId != DB.ElementId.InvalidElementId:
-        return None, "Element belongs to a group"
+    if not is_supported_instance(element):
+        return None, "Unsupported instance or grouped element"
 
     parameter, reason = get_target_parameter(
         element, config
@@ -165,7 +283,7 @@ def validate_element(element, config, new_value):
     return parameter, None
 
 def prepare_batch(elements, config, new_value):
-    """Build editable and skipped element lists."""
+    """Separate editable and skipped elements."""
 
     editable = []
     skipped = []
@@ -177,14 +295,12 @@ def prepare_batch(elements, config, new_value):
         )
 
         if reason is not None:
-
             skipped.append({
                 "id": element.Id,
                 "reason": reason
             })
 
         else:
-
             editable.append({
                 "id": element.Id,
                 "parameter": parameter,
@@ -195,7 +311,7 @@ def prepare_batch(elements, config, new_value):
 
 def print_preview(output, document, config,
                   editable, skipped, new_value):
-    """Display changes before the transaction."""
+    """Show the proposed changes before execution."""
 
     output.print_md("# Batch Parameter Editor")
     output.print_md(
@@ -216,16 +332,17 @@ def print_preview(output, document, config,
         columns=["Metric", "Value"]
     )
 
-    rows = []
+    if editable:
 
-    for item in editable:
-        rows.append([
-            str(item["id"]),
-            item["old_value"],
-            new_value
-        ])
+        rows = []
 
-    if rows:
+        for item in editable:
+            rows.append([
+                str(item["id"]),
+                item["old_value"],
+                new_value
+            ])
+
         output.print_table(
             table_data=rows,
             columns=[
@@ -236,23 +353,24 @@ def print_preview(output, document, config,
         )
 
     if skipped:
-        output.print_md("## Pre-validation Skips")
 
-        skipped_rows = []
+        output.print_md("## Skipped Elements")
+
+        rows = []
 
         for item in skipped:
-            skipped_rows.append([
+            rows.append([
                 str(item["id"]),
                 item["reason"]
             ])
 
         output.print_table(
-            table_data=skipped_rows,
+            table_data=rows,
             columns=["Element ID", "Reason"]
         )
 
 def apply_batch(document, editable, new_value):
-    """Execute all edits in a single transaction."""
+    """Apply edits using one Revit transaction."""
 
     transaction = DB.Transaction(
         document, "Batch Parameter Editor"
@@ -262,9 +380,7 @@ def apply_batch(document, editable, new_value):
         start_status = transaction.Start()
 
         if start_status != DB.TransactionStatus.Started:
-            raise Exception(
-                "Transaction could not be started."
-            )
+            raise Exception("Transaction could not be started")
 
         for item in editable:
 
@@ -296,6 +412,7 @@ def apply_batch(document, editable, new_value):
             status = transaction.GetStatus()
 
             if status == DB.TransactionStatus.Started:
+
                 rollback_status = transaction.RollBack()
 
                 if rollback_status == DB.TransactionStatus.RolledBack:
@@ -319,6 +436,7 @@ def apply_batch(document, editable, new_value):
             )
 
         except Exception as rollback_error:
+
             return (
                 "Unverified",
                 "{} | Rollback error: {}".format(
@@ -328,7 +446,7 @@ def apply_batch(document, editable, new_value):
 
 def print_results(output, editable, skipped,
                   status, error):
-    """Show transaction outcome and element counts."""
+    """Report the final transaction outcome."""
 
     output.print_md("## Execution Results")
 
@@ -348,27 +466,27 @@ def print_results(output, editable, skipped,
 
     if committed:
         output.print_md(
-            "**SUCCESS:** Changes were committed."
+            "**SUCCESS:** Batch changes were committed."
         )
 
     elif status == "RolledBack":
         output.print_md(
-            "**ROLLED BACK:** No batch changes were committed."
+            "**ROLLED BACK:** The transaction was reverted."
         )
 
     else:
         output.print_md(
-            "**WARNING:** Transaction outcome could "
-            "not be fully verified. Inspect the model."
+            "**WARNING:** Transaction outcome is unverified. "
+            "Inspect the model before continuing."
         )
 
-    if error is not None:
+    if error:
         output.print_md(
             "**Details:** {}".format(error)
         )
 
 def main():
-    """Run the Batch Parameter Editor."""
+    """Run the parameter discovery and editing workflow."""
 
     doc = revit.doc
     uidoc = revit.uidoc
@@ -399,7 +517,7 @@ def main():
         )
         return
 
-    config = choose_parameter(elements)
+    config = choose_parameter(elements, doc)
 
     if config is None:
         return
@@ -440,7 +558,7 @@ def main():
 
     confirmed = forms.alert(
         "Parameter: {}\n"
-        "Eligible elements: {}\n"
+        "Editable elements: {}\n"
         "Skipped elements: {}\n\n"
         "Apply these changes?".format(
             config["name"],

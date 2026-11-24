@@ -2,151 +2,346 @@
 
 **Project 02 — BIM Automation Portfolio**
 
-A pyRevit tool for controlled batch editing of Autodesk Revit instance parameters using Python and the Revit API.
+A Python-based pyRevit automation tool designed to safely edit instance text parameters across selected Autodesk Revit elements.
 
-## Overview
+The project demonstrates Revit API integration, automatic parameter discovery, data validation, transaction management, and controlled BIM model modifications.
 
-The Batch Parameter Editor allows users to update supported instance text parameters across selected Revit elements.
+## 1. Project Overview
 
-The tool combines parameter validation, change previews, user confirmation, and Revit transactions to provide a controlled model-editing workflow.
+The Batch Parameter Editor addresses a common BIM workflow: updating parameter values across multiple model elements without manually editing each instance.
 
-## Technology Stack
+The tool allows users to select Revit elements, discover compatible parameters, review proposed changes, and execute batch updates using the Autodesk Revit API.
 
-- Autodesk Revit 2024.3
-- pyRevit 7.1
-- IronPython
-- Autodesk Revit API
-- Visual Studio Code
-- Git and GitHub
+The primary objective is to demonstrate how Python and pyRevit can automate repetitive BIM data management tasks while maintaining control over model modifications.
 
-## Features
+## 2. Technology Stack
 
-### 1. Parameter Selection
+| Technology | Purpose |
+|---|---|
+| Autodesk Revit 2024.3 | BIM authoring environment |
+| Revit API | Access and modify model elements and parameters |
+| pyRevit 7.1 | Revit interface integration and Python execution |
+| IronPython | Python scripting environment |
+| Visual Studio Code | Development environment |
+| Git & GitHub | Version control and documentation |
 
-Users can choose between:
+## 3. Features
 
-- **Comments:** Batch editing of instance comments.
-- **Mark:** Single-element editing to reduce accidental duplicate identifiers.
-- **Custom Text Parameter:** Batch editing of compatible, uniquely named instance text parameters.
+### 3.1 Element Selection
 
-### 2. Parameter Validation
+The tool retrieves elements from the active Revit selection using:
 
-Before modifying elements, the tool checks:
+- `UIDocument.Selection.GetElementIds()`
+- `Document.GetElement()`
 
-- Whether the element is an instance rather than an element type.
-- Whether the element belongs to a group.
+Only the selected elements are considered for modification.
+
+### 3.2 Automatic Parameter Discovery
+
+The editor automatically inspects selected elements to discover compatible instance text parameters.
+
+The discovery workflow:
+
+1. Reads parameters from the selected element instances.
+2. Filters parameters by `DB.StorageType.String`.
+3. Excludes read-only parameters.
+4. Identifies supported document-defined parameters.
+5. Finds parameters common to eligible selected instances.
+6. Generates the parameter selection interface dynamically.
+
+This reduces the need to manually configure parameter names in the Python script.
+
+### 3.3 Built-in Parameter Support
+
+The editor includes dedicated handling for:
+
+**Comments**
+
+- Supports batch editing.
+- Uses `ALL_MODEL_INSTANCE_COMMENTS`.
+- Allows the same text value to be applied to multiple eligible instances.
+
+**Mark**
+
+- Supports single-element editing.
+- Uses `ALL_MODEL_MARK`.
+- Restricts editing to one selected element per operation to reduce accidental duplicate identifiers.
+
+Mark uniqueness is not checked across the entire model.
+
+### 3.4 Parameter Validation
+
+Before modifying the model, the tool validates:
+
+- Element instance eligibility.
+- Group membership.
 - Parameter existence.
-- Parameter storage type (`DB.StorageType.String`).
-- Read-only status (`Parameter.IsReadOnly`).
-- Whether the existing value already matches the requested value.
-- Ambiguous parameter names for custom parameter selection.
+- Parameter identity.
+- Parameter storage type.
+- Read-only status.
+- Existing values.
 
-Unsupported elements are skipped with an explanation.
+Elements that fail validation are excluded from the modification batch.
 
-### 3. Change Preview
+### 3.5 Change Preview
 
-Before committing changes, the tool displays:
+Before executing changes, the tool displays:
 
+- Active model name.
 - Selected parameter.
-- Editable element count.
-- Skipped element count.
-- Current values.
+- Number of editable elements.
+- Number of skipped elements.
+- Current parameter values.
 - Proposed new values.
+- Reasons for skipped elements.
 
-### 4. Controlled Model Modification
+The user must confirm the proposed operation before any changes are committed.
 
-Changes are executed using a single `DB.Transaction`.
+### 3.6 Transaction Management
 
-The implementation checks the transaction status and attempts rollback if an exception occurs during execution.
+The tool performs permitted modifications inside a single `DB.Transaction`.
 
-### 5. Execution Report
+The workflow uses:
 
-After execution, the tool reports:
+- `Transaction.Start()`
+- `Parameter.Set()`
+- `Transaction.Commit()`
+- `Transaction.RollBack()`
+
+The implementation checks transaction status and attempts rollback when an exception occurs during the modification process.
+
+If the transaction outcome cannot be verified, the tool reports an explicit warning.
+
+### 3.7 Execution Report
+
+After execution, the tool displays:
 
 - Transaction status.
-- Updated elements.
-- Skipped elements.
-- Execution errors or warnings.
+- Number of updated elements.
+- Number of skipped elements.
+- Errors or warnings.
 
-## Installation
+## 4. Project Structure
 
-1. Install Revit 2024 and a compatible pyRevit version.
-2. Clone this repository.
-3. Register the `02-batch-parameter-editor/src/` folder as a pyRevit extension search path.
+```text
+02-batch-parameter-editor/
+│
+├── README.md
+│
+├── screenshots/
+│   └── 01-successful-batch-update.png
+│
+├── sample-models/
+│   └── batch-editor-test.rvt
+│
+└── src/
+    └── BatchParameterTools.extension/
+        └── VDC.tab/
+            └── Parameter Tools.panel/
+                ├── Batch Editor.pushbutton/
+                │   ├── icon.png
+                │   └── script.py
+                │
+                └── Rollback Test.pushbutton/
+                    └── script.py
+```
+
+The sample model is stored locally and excluded from Git version control.
+
+The Rollback Test button is a separate development and testing utility and is not required for normal batch editing.
+
+## 5. Installation
+
+### Requirements
+
+- Autodesk Revit 2024
+- Compatible pyRevit installation
+- Python scripting engine supported by pyRevit
+
+### Setup
+
+1. Clone or download the repository.
+2. Locate `02-batch-parameter-editor/src/`.
+3. Register that directory as a pyRevit extension search path.
 4. Reload pyRevit.
-5. Open the **VDC** tab.
-6. Navigate to **Parameter Tools → Batch Editor**.
+5. Open the **VDC** tab in Revit.
+6. Locate **Parameter Tools → Batch Editor**.
 
-## Usage
+The extension is named `BatchParameterTools.extension` and can be loaded independently of the other portfolio projects.
+
+## 6. How to Use
 
 1. Open an editable Revit project.
-2. Select one or more elements.
-3. Launch **Batch Editor**.
-4. Choose a supported parameter.
-5. Enter the new text value.
+2. Select one or more model elements.
+3. Launch **VDC → Parameter Tools → Batch Editor**.
+4. Select a parameter from the automatically generated list.
+5. Enter a new text value.
 6. Review the proposed changes.
 7. Confirm the operation.
 8. Review the execution report.
+9. Verify the updated parameter values in Revit Properties.
 
-## Testing and Validation
+Use a disposable test model when evaluating unfamiliar parameter configurations.
 
-### Milestone 01 — Basic Batch Editing
+## 7. Development Milestones
 
-Tested on a local copy of the Autodesk architectural sample model.
+### Milestone 01 — Basic Batch Parameter Editing
+
+**Objective:** Build a working tool capable of editing the instance Comments parameter across multiple selected elements.
+
+Implemented:
+
+- Element selection.
+- Comments parameter access.
+- Parameter validation.
+- Change preview.
+- User confirmation.
+- Transaction-based modification.
+- Execution report.
+
+**Verified Test Results**
 
 | Test | Result |
 |---|---|
-| Selected elements | 3 doors |
+| Model | Autodesk architectural sample copy |
+| Selected elements | 3 door instances |
 | Parameter | Comments |
 | New value | QA TEST |
-| Updated | 3 |
-| Skipped | 0 |
+| Updated elements | 3 |
+| Skipped elements | 0 |
 | Transaction | Committed |
 | Property verification | Passed |
 
-### Milestone 02 — Transaction Rollback
+The updated value was confirmed in the Revit Properties interface.
 
-A separate test command was implemented to simulate an execution failure and attempt to restore the original parameter value using `Transaction.RollBack()`.
+### Milestone 02 — Controlled Transaction Rollback
 
-The controlled test result should be recorded separately once verified.
+**Objective:** Demonstrate how transaction rollback can prevent partial changes from being committed after an execution failure.
+
+A separate test command was developed to:
+
+1. Read the original Comments value.
+2. Start a transaction.
+3. Temporarily change the parameter.
+4. Simulate an exception.
+5. Attempt transaction rollback.
+6. Compare the final value with the original value.
+
+The controlled rollback test implementation is available for development purposes.
+
+**Validation status:** A complete recorded test result has not yet been included in this documentation.
 
 ### Milestone 03 — Enhanced Parameter Selection
 
-Implemented parameter selection for Comments, Mark, and custom text parameters.
+**Objective:** Extend the editor beyond a single hardcoded parameter.
 
-The enhanced interface has been launched and tested locally in Revit. Individual test outcomes should be documented with screenshots before final release.
+Implemented:
 
-## Screenshots
+- Parameter selection interface.
+- Built-in Comments editing.
+- Single-element Mark editing.
+- Custom text parameter selection.
+- Improved parameter validation.
+- Transaction outcome reporting.
 
-### Basic Batch Update
+The enhanced selection interface was launched and exercised locally in Revit.
 
-![Successful batch update](screenshots/01-successful-batch-update.png)
+### Milestone 04 — Automatic Parameter Discovery
 
-Additional screenshots will document parameter selection, Mark editing, and transaction rollback.
+**Objective:** Automatically identify compatible text parameters from the active selection.
 
-## Limitations
+Implemented:
 
-- Only text parameters are supported.
-- Custom parameters must have an unambiguous name on each edited element.
-- Custom-parameter selection does not yet use shared parameter GUIDs.
-- Mark editing is restricted to one selected element but does not perform a model-wide uniqueness check.
+- Dynamic inspection of instance parameters.
+- Filtering by storage type and editability.
+- Identification of supported document-defined parameters.
+- Parameter intersection across eligible selected instances.
+- Dynamic pyRevit parameter selection.
+- Dedicated handling for Comments and Mark.
+- Preservation of preview, confirmation, and transaction safeguards.
+
+**Observed Test**
+
+The automatic parameter selection interface loaded successfully with two selected door instances.
+
+The interface displayed:
+
+`Comments [Built-in | Batch]`
+
+This was consistent with the current restrictions because Mark is limited to single-element selection and no additional compatible shared parameter was observed.
+
+**Validation status:** Automatic parameter discovery interface verified. A full write test using an automatically discovered custom parameter has not been performed.
+
+## 8. Screenshots
+
+### Milestone 01 — Successful Batch Update
+
+![Successful batch parameter update](screenshots/01-successful-batch-update.png)
+
+Additional testing screenshots may be added as new cases are independently verified.
+
+## 9. Important Revit API Concepts
+
+| API Component | Purpose |
+|---|---|
+| `UIDocument` | Access the active Revit user interface and selection |
+| `Document` | Access the active model |
+| `ElementId` | Identify model elements |
+| `Document.GetElement()` | Retrieve elements from the document |
+| `Element.Parameters` | Inspect element parameters |
+| `Parameter` | Access and modify a parameter |
+| `BuiltInParameter` | Identify built-in Revit parameters |
+| `ParameterElement` | Identify document-defined parameter elements |
+| `StorageType` | Determine how parameter values are stored |
+| `Parameter.IsReadOnly` | Check whether a parameter permits editing |
+| `Parameter.Set()` | Request a parameter value modification |
+| `DB.Transaction` | Manage model modification operations |
+| `Transaction.RollBack()` | Revert a transaction when applicable |
+
+## 10. Limitations and Safety Considerations
+
+- Supports instance text parameters only.
+- Numeric and unit-based parameters are not supported.
+- Automatic discovery is limited to compatible document-defined parameters.
+- Certain built-in parameters are intentionally excluded from automatic discovery.
+- Mark editing is restricted to one element but does not guarantee uniqueness.
+- Grouped elements and element types are excluded.
 - Empty replacement values are not supported.
-- Workshared and linked model scenarios are not fully validated.
-- A committed transaction is not a substitute for independent verification of model data.
+- Parameters must pass validation before editing.
+- Workshared and linked model scenarios have not been fully validated.
+- Transaction commit status does not replace independent verification of model data.
+- The tool is intended for controlled testing and educational portfolio use until broader validation is completed.
 
-## Development Approach
+## 11. Development Methodology
 
-Development follows an iterative workflow:
+The project followed an iterative development process:
 
 **Build → Test → Commit → Document → Learn**
 
-The first milestone prioritized a working MVP. Subsequent development expanded the parameter selection capabilities while retaining validation and transaction safeguards.
+Development began with a narrow, functional MVP and expanded through separate milestones.
 
-The final development review will explain the relevant Python concepts, Revit API methods, implementation decisions, and testing strategy.
+Each significant improvement was tracked through Git commits, allowing earlier implementations to be recovered and reviewed.
 
-## Project Status
+The project prioritizes functional Revit automation, safe parameter handling, and reproducible technical documentation.
 
-**Enhanced functional prototype — final validation and documentation pending.**
+## 12. Future Improvements
+
+Potential improvements outside the current project scope include:
+
+- Advanced parameter discovery using shared parameter GUIDs.
+- Numeric parameter editing with unit conversion.
+- Model-wide Mark uniqueness validation.
+- CSV-based parameter mapping and batch updates.
+- More extensive worksharing validation.
+- Automated regression testing.
+
+These features are not part of the current implementation.
+
+## 13. Project Status
+
+**Functional prototype — automatic parameter discovery implemented and interface tested in Revit 2024.3.**
+
+Core batch editing was successfully verified. Advanced parameter discovery and transaction safety cases require additional validation before production use.
 
 ## Portfolio
 
