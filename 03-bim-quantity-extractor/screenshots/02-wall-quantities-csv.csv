@@ -1,0 +1,57 @@
+﻿model_name,element_id,unique_id,family,type_name,type_id,length_m,area_m2,volume_m3,quantity_status
+qty_extract,198694,ef57b02a-5e81-49e7-93bb-ae5f002d921c-00030826,Muro básico,SIP 202mm Wall - conc clad,428955,6.202000,22.354990,4.515708,OK
+qty_extract,198749,ef57b02a-5e81-49e7-93bb-ae5f002d921c-0003085d,Muro básico,Wall - Timber Clad,198367,4.580000,6.009968,1.214013,OK
+qty_extract,234869,88b03b05-80d3-484f-8022-471f61604c8d-00039575,Muro básico,Wall - Timber Clad,198367,4.661000,21.474508,4.337851,OK
+qty_extract,418079,72678df9-14a3-4aee-a80e-94a8e55a0926-0006611f,Muro básico,Wall - Timber Clad,198367,3.200000,8.640000,1.745280,OK
+qty_extract,422243,59371552-5800-43eb-9ba3-609565158fc5-00067163,Muro básico,Wall - Timber Clad,198367,3.041000,5.985300,1.209031,OK
+qty_extract,423099,59371552-5800-43eb-9ba3-609565158fc5-000674bb,Muro cortina,SH_Curtain wall,458927,3.000000,17.100000,,REVIEW
+qty_extract,424922,59371552-5800-43eb-9ba3-609565158fc5-00067bda,Muro básico,Interior - 165 Partition (1-hr),232754,3.041000,5.985300,0.988173,OK
+qty_extract,425745,7fcc8dca-3132-4323-9d41-faf5184b4f26-00067f11,Muro básico,Interior - 165 Partition (1-hr),232754,2.558450,6.412230,1.058659,OK
+qty_extract,427092,c85e5be0-d8d5-4148-836f-b55e711ef373-00068454,Muro básico,Wall - Timber Clad,198367,19.822000,61.105800,12.343372,OK
+qty_extract,428588,c85e5be0-d8d5-4148-836f-b55e711ef373-00068a2c,Muro básico,SIP 202mm Wall - conc clad,428955,19.702000,43.200000,8.094846,OK
+qty_extract,428745,c85e5be0-d8d5-4148-836f-b55e711ef373-00068ac9,Muro básico,SIP 202mm Wall - conc clad,428955,19.702000,43.295700,8.150025,OK
+qty_extract,428797,c85e5be0-d8d5-4148-836f-b55e711ef373-00068afd,Muro cortina,SH_Curtain wall,458927,6.202000,26.485096,,REVIEW
+qty_extract,429964,2fc77d67-1af0-4a43-aa66-c544d411df04-00068f8c,Muro básico,Interior - Partition,232827,6.202000,24.805096,2.976612,OK
+qty_extract,430064,2fc77d67-1af0-4a43-aa66-c544d411df04-00068ff0,Muro básico,Interior - Partition,232827,11.380000,40.014582,4.468133,OK
+qty_extract,430318,2fc77d67-1af0-4a43-aa66-c544d411df04-000690ee,Muro básico,Interior - Partition,232827,2.824000,13.025436,1.563052,OK
+qty_extract,430361,2fc77d67-1af0-4a43-aa66-c544d411df04-00069119,Muro básico,Interior - Partition,232827,2.880000,12.819259,1.519194,OK
+qty_extract,430412,2fc77d67-1af0-4a43-aa66-c544d411df04-0006914c,Muro básico,Interior - Partition,232827,2.157000,6.645795,0.797495,OK
+qty_extract,430859,2fc77d67-1af0-4a43-aa66-c544d411df04-0006930b,Muro básico,Interior - Partition,232827,4.661000,19.558993,2.221804,OK
+qty_extract,493612,17836a3c-e764-47fa-a2e0-08216444f621-0007882c,Muro básico,CL_W1,600634,9.628063,24.781615,6.801273,OK
+qty_extract,493697,17836a3c-e764-47fa-a2e0-08216444f621-00078881,Muro básico,CL_W1,600634,21.026016,74.563696,20.833247,OK
+qty_extract,493790,17836a3c-e764-47fa-a2e0-08216444f621-000788de,Muro básico,CL_W1,600634,15.750136,55.183576,15.451401,OK
+qty_extract,493879,17836a3c-e764-47fa-a2e0-08216444f621-00078937,Muro básico,Foundation - 300mm Concrete,581500,8.946549,30.902242,9.061988,OK
+qty_extract,497540,6dd03812-90e2-4279-9751-5fbc3584962d-00079784,Muro básico,Interior - Partition,232827,2.440000,13.560271,1.609869,OK
+qty_extract,506386,96834e54-f091-4317-9b1a-bbe8b647201d-0007ba12,Muro básico,Interior - Partition,232827,1.200000,6.132334,0.727568,OK
+qty_extract,506797,96834e54-f091-4317-9b1a-bbe8b647201d-0007bbad,Muro básico,Interior - Partition,232827,1.020000,4.984573,0.598149,OK
+qty_extract,530178,c95e858d-9206-4eac-9a88-fccee0e2b73b-00081702,Muro básico,SIP 202mm Wall - conc clad,428955,6.202000,5.913570,1.194541,OK
+qty_extract,599841,fe746f97-9f89-4685-8fa8-a4525719f180-00092721,Muro básico,Retaining - 300mm Concrete,711906,7.150000,25.330000,7.599000,OK
+qty_extract,599906,fe746f97-9f89-4685-8fa8-a4525719f180-00092762,Muro básico,Retaining - 300mm Concrete,711906,13.702000,46.586800,13.976040,OK
+qty_extract,599951,fe746f97-9f89-4685-8fa8-a4525719f180-0009278f,Muro básico,Retaining - 300mm Concrete,711906,4.150000,14.110000,4.233000,OK
+qty_extract,627064,5b7ac240-e9a7-43b2-b6bf-246956549a40-00099178,Muro básico,CL_W1,600634,24.690000,36.615000,10.252200,OK
+qty_extract,627729,5b7ac240-e9a7-43b2-b6bf-246956549a40-00099411,Muro básico,CL_W1,600634,6.722759,9.754534,2.686892,OK
+qty_extract,628523,5b7ac240-e9a7-43b2-b6bf-246956549a40-0009972b,Muro básico,CL_W1,600634,18.449000,27.615000,7.732200,OK
+qty_extract,655533,87beca50-3847-4f14-8281-4eb8890e91b0-000a00ad,Muro básico,Wall - Timber Clad,198367,6.202000,3.300000,0.666600,OK
+qty_extract,704275,555aa063-b8a7-4b4f-ae07-ad835f8857bb-000abf13,Muro cortina,SH_Curtain wall,458927,6.202000,16.200000,,REVIEW
+qty_extract,707722,e2eeab38-f437-4dce-846b-cb64191c9fcc-000acc8a,Muro cortina,SH_Curtain wall,458927,1.481000,7.866000,,REVIEW
+qty_extract,708088,e2eeab38-f437-4dce-846b-cb64191c9fcc-000acdf8,Muro cortina,SH_Curtain wall,458927,1.481000,3.726000,,REVIEW
+qty_extract,709245,e2eeab38-f437-4dce-846b-cb64191c9fcc-000ad27d,Muro cortina,SH_Curtain wall,458927,3.010000,7.854300,,REVIEW
+qty_extract,745997,a03add59-4d19-48e3-b25b-2f947f402211-000b620d,Muro básico,Retaining - 300mm Concrete,711906,10.240000,26.624000,7.987200,OK
+qty_extract,746235,a03add59-4d19-48e3-b25b-2f947f402211-000b62fb,Muro básico,Retaining - 300mm Concrete,711906,7.225848,20.632704,5.987161,OK
+qty_extract,746589,a03add59-4d19-48e3-b25b-2f947f402211-000b645d,Muro básico,Retaining - 300mm Concrete,711906,5.000000,14.065500,4.017000,OK
+qty_extract,746634,a03add59-4d19-48e3-b25b-2f947f402211-000b648a,Muro básico,Retaining - 300mm Concrete,711906,5.200000,13.415500,3.822000,OK
+qty_extract,746766,a03add59-4d19-48e3-b25b-2f947f402211-000b650e,Muro básico,Retaining - 300mm Concrete,711906,7.095758,18.344471,5.300691,OK
+qty_extract,765523,c82e0dd9-31e8-407e-a294-c30431c2fda3-000bae53,Muro básico,Retaining - 300mm Concrete,711906,2.840000,8.339000,2.501700,OK
+qty_extract,765620,c82e0dd9-31e8-407e-a294-c30431c2fda3-000baeb4,Muro básico,Retaining - 300mm Concrete,711906,2.840000,8.339000,2.501700,OK
+qty_extract,768442,3195d1cb-ca2c-4181-b9c0-51da296667aa-000bb9ba,Muro básico,Interior - Partition,232827,2.880000,13.668918,1.621153,OK
+qty_extract,845266,f565bef9-7d27-4781-b8d4-60f4a6034d87-000ce5d2,Muro básico,Wall - Timber Clad,198367,4.700000,13.638900,2.755058,OK
+qty_extract,846939,98e2f96c-ccbd-4abb-a697-e7e5136106ee-000cec5b,Muro cortina,SH_Curtain wall,458927,11.899000,31.854600,,REVIEW
+qty_extract,847436,98e2f96c-ccbd-4abb-a697-e7e5136106ee-000cee4c,Muro cortina,SH_Curtain wall,458927,6.101000,16.472700,,REVIEW
+qty_extract,849032,98e2f96c-ccbd-4abb-a697-e7e5136106ee-000cf488,Muro básico,Wall - Timber Clad,198367,15.202000,42.751800,8.635864,OK
+qty_extract,906885,b3a4a465-08e5-441a-bd3e-d967e546d52e-000dd685,Muro básico,Interior - 165 Partition (1-hr),232754,1.982550,4.857300,0.801940,OK
+qty_extract,937935,bac06658-19d8-494b-b87a-559081499f8f-000e4fcf,Muro básico,Interior - Partition,232827,1.837000,6.239816,0.748778,OK
+qty_extract,938974,bac06658-19d8-494b-b87a-559081499f8f-000e53de,Muro básico,Interior - Partition,232827,2.504000,12.619457,1.514335,OK
+qty_extract,939084,bac06658-19d8-494b-b87a-559081499f8f-000e544c,Muro básico,Interior - Partition,232827,2.494900,10.097283,1.201602,OK
+qty_extract,976752,ab343b7e-3705-4b87-bacc-33c06a6cee1d-000ee770,Muro básico,Interior - Partition,232827,3.161000,2.367200,0.284064,OK
+qty_extract,977133,ab343b7e-3705-4b87-bacc-33c06a6cee1d-000ee8ed,Muro básico,Cavity wall_sliders,845480,2.940000,9.368700,2.623236,OK
+qty_extract,977377,ab343b7e-3705-4b87-bacc-33c06a6cee1d-000ee9e1,Muro cortina,SH_Curtain wall,458927,11.800000,31.860000,,REVIEW
