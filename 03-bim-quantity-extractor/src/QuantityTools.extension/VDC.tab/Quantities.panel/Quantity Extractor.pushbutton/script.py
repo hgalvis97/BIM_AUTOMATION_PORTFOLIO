@@ -4,8 +4,19 @@
 """BIM Quantity Extractor - Validation and Aggregation."""
 
 import math
+import os
+import sys
 
 from pyrevit import revit, DB, forms, script
+
+# Make the local export module available.
+
+bundle_folder = os.path.dirname(__file__)
+
+if bundle_folder not in sys.path:
+    sys.path.insert(0, bundle_folder)
+
+from quantity_export import export_datasets
 
 
 doc = revit.doc
@@ -1322,6 +1333,8 @@ def generate_report(document, records, groups, selected_categories):
         )
 
 
+
+
 # --------------------------------------------------
 # 19. Main workflow
 # --------------------------------------------------
@@ -1365,6 +1378,75 @@ def main():
         selected_categories
     )
 
+    # Ask the user where to save the datasets.
+
+    parent_folder = forms.pick_folder(
+        title="Select CSV Export Folder"
+    )
+
+    if not parent_folder:
+
+        output.print_md(
+            "## CSV Export Cancelled"
+        )
+
+        return
+
+    try:
+
+        export_folder, exported_files = export_datasets(
+            parent_folder,
+            doc.Title,
+            records,
+            groups,
+            selected_categories
+        )
+
+        output.print_md("## CSV Export Complete")
+
+        output.print_md(
+            "**Destination:** {}".format(
+                export_folder
+            )
+        )
+
+        rows = []
+
+        for exported_file in exported_files:
+
+            rows.append([
+                exported_file["filename"],
+                exported_file["row_count"],
+                "Exported"
+            ])
+
+        output.print_table(
+            table_data=rows,
+            columns=[
+                "Dataset",
+                "Records",
+                "Status"
+            ],
+            title="Exported CSV Datasets"
+        )
+
+        forms.alert(
+            "Three CSV datasets exported successfully.",
+            title="BIM Quantity Extractor"
+        )
+
+    except Exception as error:
+
+        output.print_md("## CSV Export Failed")
+
+        output.print_md(
+            "**Error:** {}".format(error)
+        )
+
+        forms.alert(
+            "CSV export failed. Check the output report.",
+            title="BIM Quantity Extractor"
+        )
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,12 @@
+﻿model_name,check_type,category,quantity,element_id,raw_value,grouped_value,valid_count,expected_count,status,details
+qty_extract,Count Reconciliation,,,,76,76,,,PASS,Supported vs grouped instances
+qty_extract,Unique Element IDs,,,,76,76,,,PASS,Collected vs unique element IDs
+qty_extract,Category Count,Walls,,,56,56,,,PASS,Collected: 56; Unsupported: 0
+qty_extract,Quantity Reconciliation,Walls,length_m,,"393,211029293739","393,211029293739",56,56,PASS,Raw vs aggregated quantities
+qty_extract,Quantity Reconciliation,Walls,area_m2,,"1105,4544136351","1105,4544136351",56,56,PASS,Raw vs aggregated quantities
+qty_extract,Quantity Reconciliation,Walls,volume_m3,,"212,930696450374","212,930696450373",47,47,PASS,Raw vs aggregated quantities
+qty_extract,Category Count,Windows,,,17,17,,,PASS,Collected: 17; Unsupported: 0
+qty_extract,Category Count,Structural Columns,,,3,3,,,PASS,Collected: 3; Unsupported: 0
+qty_extract,Quantity Reconciliation,Structural Columns,volume_m3,,"4,12225036511432","4,12225036511432",3,3,PASS,Raw vs aggregated quantities
+qty_extract,Level Identification,Windows,,488881,,,,,REVIEW,No valid associated level
+qty_extract,Level Identification,Windows,,489062,,,,,REVIEW,No valid associated level
