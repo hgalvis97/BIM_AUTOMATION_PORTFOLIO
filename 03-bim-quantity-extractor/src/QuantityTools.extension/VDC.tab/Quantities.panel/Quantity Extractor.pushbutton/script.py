@@ -1,7 +1,9 @@
 
 # -*- coding: utf-8 -*-
 
-"""BIM Quantity Extractor - Multi-Category Collection."""
+"""BIM Quantity Extractor - Multi-Category Extraction."""
+
+import math
 
 from pyrevit import revit, DB, forms, script
 
@@ -11,15 +13,58 @@ output = script.get_output()
 
 
 # --------------------------------------------------
-# 1. Category configuration
+# 1. Quantity configuration
+# --------------------------------------------------
+
+QUANTITY_CONFIG = {
+    "length_m": {
+        "parameter": DB.BuiltInParameter.CURVE_ELEM_LENGTH,
+        "unit": DB.UnitTypeId.Meters
+    },
+    "area_m2": {
+        "parameter": DB.BuiltInParameter.HOST_AREA_COMPUTED,
+        "unit": DB.UnitTypeId.SquareMeters
+    },
+    "volume_m3": {
+        "parameter": DB.BuiltInParameter.HOST_VOLUME_COMPUTED,
+        "unit": DB.UnitTypeId.CubicMeters
+    },
+    "width_mm": {
+        "parameter": DB.BuiltInParameter.FAMILY_WIDTH_PARAM,
+        "unit": DB.UnitTypeId.Millimeters
+    },
+    "height_mm": {
+        "parameter": DB.BuiltInParameter.FAMILY_HEIGHT_PARAM,
+        "unit": DB.UnitTypeId.Millimeters
+    }
+}
+
+
+# --------------------------------------------------
+# 2. Category configuration
 # --------------------------------------------------
 
 CATEGORY_CONFIG = {
-    "Walls": DB.BuiltInCategory.OST_Walls,
-    "Floors": DB.BuiltInCategory.OST_Floors,
-    "Doors": DB.BuiltInCategory.OST_Doors,
-    "Windows": DB.BuiltInCategory.OST_Windows,
-    "Structural Columns": DB.BuiltInCategory.OST_StructuralColumns
+    "Walls": {
+        "category": DB.BuiltInCategory.OST_Walls,
+        "quantities": ["length_m", "area_m2", "volume_m3"]
+    },
+    "Floors": {
+        "category": DB.BuiltInCategory.OST_Floors,
+        "quantities": ["area_m2", "volume_m3"]
+    },
+    "Doors": {
+        "category": DB.BuiltInCategory.OST_Doors,
+        "quantities": ["width_mm", "height_mm"]
+    },
+    "Windows": {
+        "category": DB.BuiltInCategory.OST_Windows,
+        "quantities": ["width_mm", "height_mm"]
+    },
+    "Structural Columns": {
+        "category": DB.BuiltInCategory.OST_StructuralColumns,
+        "quantities": ["volume_m3"]
+    }
 }
 
 CATEGORY_ORDER = [
@@ -30,13 +75,28 @@ CATEGORY_ORDER = [
     "Structural Columns"
 ]
 
+QUANTITY_FIELDS = [
+    "length_m",
+    "area_m2",
+    "volume_m3",
+    "width_mm",
+    "height_mm"
+]
+
+QUANTITY_LABELS = {
+    "length_m": "Length (m)",
+    "area_m2": "Area (m2)",
+    "volume_m3": "Volume (m3)",
+    "width_mm": "Width (mm)",
+    "height_mm": "Height (mm)"
+}
+
 
 # --------------------------------------------------
-# 2. Category selection
+# 3. Category selection
 # --------------------------------------------------
 
 def select_categories():
-    """Allow the user to select multiple BIM categories."""
 
     selected = forms.SelectFromList.show(
         CATEGORY_ORDER,
@@ -51,11 +111,10 @@ def select_categories():
 
 
 # --------------------------------------------------
-# 3. Generic element collector
+# 4. Generic element collector
 # --------------------------------------------------
 
 def collect_elements(document, category):
-    """Collect element instances from a given category."""
 
     return list(
         DB.FilteredElementCollector(document)
@@ -66,98 +125,428 @@ def collect_elements(document, category):
 
 
 # --------------------------------------------------
-# 4. Collect selected categories
+# 5. Parameter extraction
 # --------------------------------------------------
 
-def collect_selected_categories(document, selected_categories):
-    """Collect and organize elements by category."""
+def get_quantity(element, field):
 
-    category_data = {}
+    if element is None:
+        return None
+
+    config = QUANTITY_CONFIG[field]
+
+    parameter = element.get_Parameter(
+        config["parameter"]
+    )
+
+    if parameter is None:
+        return None
+
+    if not parameter.HasValue:
+        return None
+
+    if parameter.StorageType != DB.StorageType.Double:
+        return None
+
+    value = parameter.AsDouble()
+
+    if math.isnan(value) or math.isinf(value):
+        return None
+
+    if value <= 0:
+        return None
+
+    return DB.UnitUtils.ConvertFromInternalUnits(
+        value,
+        config["unit"]
+    )
+
+
+def get_dimension(element, element_type, field):
+
+    # Prefer type dimensions, with instance fallback.
+
+    value = get_quantity(element_type, field)
+
+    if value is None:
+        value = get_quantity(element, field)
+
+    return value
+
+
+# --------------------------------------------------
+# 6. Element identity
+# --------------------------------------------------
+
+def get_type_name(element_type):
+
+    if element_type is None:
+        return "Unknown Type"
+
+    parameter = element_type.get_Parameter(
+        DB.BuiltInParameter.SYMBOL_NAME_PARAM
+    )
+
+    if parameter is not None:
+
+        name = parameter.AsString()
+
+        if name:
+            return name
+
+    return "Unknown Type"
+
+
+def get_family_name(element_type):
+
+    if element_type is None:
+        return "Unknown Family"
+
+    return element_type.FamilyName
+
+
+# --------------------------------------------------
+# 7. Wall classification
+# --------------------------------------------------
+
+def get_wall_kind(element_type):
+
+    if not isinstance(element_type, DB.WallType):
+        return "Unknown"
+
+    if element_type.Kind == DB.WallKind.Basic:
+        return "Basic"
+
+    if element_type.Kind == DB.WallKind.Curtain:
+        return "Curtain"
+
+    if element_type.Kind == DB.WallKind.Stacked:
+        return "Stacked"
+
+    return "Other"
+
+
+# --------------------------------------------------
+# 8. Generic element extraction
+# --------------------------------------------------
+
+def extract_element_data(element, document, category_name):
+
+    type_id = element.GetTypeId()
+    element_type = document.GetElement(type_id)
+
+    record = {
+        "model_name": document.Title,
+        "element_id": element.Id.Value,
+        "unique_id": element.UniqueId,
+        "category": category_name,
+        "family": get_family_name(element_type),
+        "type_name": get_type_name(element_type),
+        "type_id": type_id.Value,
+        "count": 1,
+        "wall_kind": "",
+        "length_m": None,
+        "area_m2": None,
+        "volume_m3": None,
+        "width_mm": None,
+        "height_mm": None,
+        "volume_status": "N/A",
+        "quantity_status": "OK",
+        "missing_fields": []
+    }
+
+    required_fields = list(
+        CATEGORY_CONFIG[category_name]["quantities"]
+    )
+
+    # Apply wall-specific extraction rules.
+
+    if category_name == "Walls":
+
+        wall_kind = get_wall_kind(element_type)
+        record["wall_kind"] = wall_kind
+
+        if not isinstance(element, DB.Wall):
+
+            record["quantity_status"] = "UNSUPPORTED"
+            return record
+
+        if (element.IsStackedWallMember or
+                wall_kind not in ("Basic", "Curtain")):
+
+            record["quantity_status"] = "UNSUPPORTED"
+            return record
+
+        if wall_kind == "Curtain":
+
+            required_fields.remove("volume_m3")
+
+    # Extract required quantities.
+
+    for field in required_fields:
+
+        if field in ("width_mm", "height_mm"):
+
+            value = get_dimension(
+                element,
+                element_type,
+                field
+            )
+
+        else:
+
+            value = get_quantity(element, field)
+
+        record[field] = value
+
+        if value is None:
+            record["missing_fields"].append(field)
+
+        if field == "volume_m3":
+
+            if value is None:
+                record["volume_status"] = "REVIEW"
+            else:
+                record["volume_status"] = "OK"
+
+    if record["missing_fields"]:
+        record["quantity_status"] = "REVIEW"
+
+    return record
+
+
+# --------------------------------------------------
+# 9. Extract selected categories
+# --------------------------------------------------
+
+def extract_selected_categories(document, selected_categories):
+
+    all_records = []
 
     for category_name in selected_categories:
 
-        category_id = CATEGORY_CONFIG[category_name]
+        config = CATEGORY_CONFIG[category_name]
 
         elements = collect_elements(
             document,
-            category_id
+            config["category"]
         )
 
-        category_data[category_name] = elements
+        for element in elements:
 
-    return category_data
+            record = extract_element_data(
+                element,
+                document,
+                category_name
+            )
+
+            all_records.append(record)
+
+    return all_records
 
 
 # --------------------------------------------------
-# 5. Generate collection report
+# 10. Format report quantities
 # --------------------------------------------------
 
-def generate_report(document, category_data):
-    """Display element counts by category."""
+def format_quantity(record, field):
+
+    value = record[field]
+
+    if record["quantity_status"] == "UNSUPPORTED":
+        return "Excluded"
+
+    if field in record["missing_fields"]:
+        return "Missing"
+
+    if value is None:
+        return "N/A"
+
+    return "{:.2f}".format(value)
+
+
+# --------------------------------------------------
+# 11. Generate report
+# --------------------------------------------------
+
+def generate_report(document, records, selected_categories):
 
     output.print_md("# BIM Quantity Extractor")
-    output.print_md("## Multi-Category Collection Report")
+    output.print_md("## Multi-Category Quantity Report")
 
     output.print_md(
         "**Model:** {}".format(document.Title)
     )
 
     output.print_md(
-        "**Selected categories:** {}".format(
-            len(category_data)
+        "**Total collected elements:** {}".format(
+            len(records)
         )
     )
 
-    total_elements = 0
-    rows = []
+    summary_rows = []
 
     for category_name in CATEGORY_ORDER:
 
-        if category_name not in category_data:
+        if category_name not in selected_categories:
             continue
 
-        elements = category_data[category_name]
-        count = len(elements)
+        category_records = [
+            record for record in records
+            if record["category"] == category_name
+        ]
 
-        total_elements += count
+        ok_count = sum(
+            1 for record in category_records
+            if record["quantity_status"] == "OK"
+        )
 
-        if count == 0:
-            status = "No elements found"
-        else:
-            status = "OK"
+        review_count = sum(
+            1 for record in category_records
+            if record["quantity_status"] == "REVIEW"
+        )
 
-        rows.append([
+        unsupported_count = sum(
+            1 for record in category_records
+            if record["quantity_status"] == "UNSUPPORTED"
+        )
+
+        summary_rows.append([
             category_name,
-            count,
-            status
+            len(category_records),
+            ok_count,
+            review_count,
+            unsupported_count
         ])
 
-    output.print_md(
-        "**Total elements:** {}".format(total_elements)
-    )
-
     output.print_table(
-        table_data=rows,
+        table_data=summary_rows,
         columns=[
             "Category",
-            "Element Count",
-            "Status"
+            "Collected",
+            "OK",
+            "Review",
+            "Unsupported"
         ],
-        title="Elements by Category"
+        title="Extraction Summary"
     )
+
+    # Display individual quantities by category.
+
+    for category_name in CATEGORY_ORDER:
+
+        if category_name not in selected_categories:
+            continue
+
+        category_records = [
+            record for record in records
+            if record["category"] == category_name
+        ]
+
+        output.print_md(
+            "## {}".format(category_name)
+        )
+
+        if not category_records:
+
+            output.print_md("No elements found.")
+            continue
+
+        fields = CATEGORY_CONFIG[category_name]["quantities"]
+
+        columns = [
+            "Element ID",
+            "Family",
+            "Type"
+        ]
+
+        if category_name == "Walls":
+            columns.append("Wall Kind")
+
+        columns.extend([
+            QUANTITY_LABELS[field]
+            for field in fields
+        ])
+
+        columns.append("Status")
+
+        rows = []
+
+        for record in category_records:
+
+            row = [
+                str(record["element_id"]),
+                record["family"],
+                record["type_name"]
+            ]
+
+            if category_name == "Walls":
+                row.append(record["wall_kind"])
+
+            for field in fields:
+
+                row.append(
+                    format_quantity(record, field)
+                )
+
+            row.append(record["quantity_status"])
+
+            rows.append(row)
+
+        output.print_table(
+            table_data=rows,
+            columns=columns
+        )
+
+    output.print_md("## Elements Requiring Review")
+
+    review_records = [
+        record for record in records
+        if record["quantity_status"] == "REVIEW"
+    ]
+
+    if not review_records:
+
+        output.print_md(
+            "No missing required quantities found."
+        )
+
+    else:
+
+        for record in review_records:
+
+            element_link = output.linkify(
+                DB.ElementId(record["element_id"])
+            )
+
+            missing = [
+                QUANTITY_LABELS[field]
+                for field in record["missing_fields"]
+            ]
+
+            output.print_md(
+                "- {} | {} | Missing: {}".format(
+                    record["category"],
+                    element_link,
+                    ", ".join(missing)
+                )
+            )
 
     output.print_md("## Extraction Notes")
 
     output.print_md(
-        "- Only element instances are collected."
+        "- N/A means the quantity is outside "
+        "the current extraction scope."
     )
 
     output.print_md(
-        "- Element types are excluded."
+        "- Unsupported elements are excluded "
+        "from quantity extraction."
     )
 
     output.print_md(
-        "- Linked models are outside the current scope."
+        "- Dimensions are read from element types "
+        "with instance fallback."
     )
 
     output.print_md(
@@ -166,16 +555,18 @@ def generate_report(document, category_data):
 
 
 # --------------------------------------------------
-# 6. Main workflow
+# 12. Main workflow
 # --------------------------------------------------
 
 def main():
 
     if doc is None:
+
         forms.alert(
             "No active Revit document found.",
             title="BIM Quantity Extractor"
         )
+
         return
 
     selected_categories = select_categories()
@@ -183,14 +574,23 @@ def main():
     if not selected_categories:
         return
 
-    category_data = collect_selected_categories(
+    records = extract_selected_categories(
         doc,
         selected_categories
     )
 
+    records.sort(
+        key=lambda record: (
+            record["category"],
+            record["type_name"],
+            record["element_id"]
+        )
+    )
+
     generate_report(
         doc,
-        category_data
+        records,
+        selected_categories
     )
 
 
