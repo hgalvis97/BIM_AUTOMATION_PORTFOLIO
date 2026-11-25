@@ -1,7 +1,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""BIM Quantity Extractor - Multi-Category and Level Identification."""
+"""BIM Quantity Extractor - Validation and Aggregation."""
 
 import math
 
@@ -19,23 +19,33 @@ output = script.get_output()
 QUANTITY_CONFIG = {
     "length_m": {
         "parameter": DB.BuiltInParameter.CURVE_ELEM_LENGTH,
-        "unit": DB.UnitTypeId.Meters
+        "unit": DB.UnitTypeId.Meters,
+        "aggregation": "SUM",
+        "label": "Length (m)"
     },
     "area_m2": {
         "parameter": DB.BuiltInParameter.HOST_AREA_COMPUTED,
-        "unit": DB.UnitTypeId.SquareMeters
+        "unit": DB.UnitTypeId.SquareMeters,
+        "aggregation": "SUM",
+        "label": "Area (m2)"
     },
     "volume_m3": {
         "parameter": DB.BuiltInParameter.HOST_VOLUME_COMPUTED,
-        "unit": DB.UnitTypeId.CubicMeters
+        "unit": DB.UnitTypeId.CubicMeters,
+        "aggregation": "SUM",
+        "label": "Volume (m3)"
     },
     "width_mm": {
         "parameter": DB.BuiltInParameter.FAMILY_WIDTH_PARAM,
-        "unit": DB.UnitTypeId.Millimeters
+        "unit": DB.UnitTypeId.Millimeters,
+        "aggregation": "RANGE",
+        "label": "Width (mm)"
     },
     "height_mm": {
         "parameter": DB.BuiltInParameter.FAMILY_HEIGHT_PARAM,
-        "unit": DB.UnitTypeId.Millimeters
+        "unit": DB.UnitTypeId.Millimeters,
+        "aggregation": "RANGE",
+        "label": "Height (mm)"
     }
 }
 
@@ -74,14 +84,6 @@ CATEGORY_ORDER = [
     "Windows",
     "Structural Columns"
 ]
-
-QUANTITY_LABELS = {
-    "length_m": "Length (m)",
-    "area_m2": "Area (m2)",
-    "volume_m3": "Volume (m3)",
-    "width_mm": "Width (mm)",
-    "height_mm": "Height (mm)"
-}
 
 
 # --------------------------------------------------
@@ -129,7 +131,7 @@ def select_categories():
 
 
 # --------------------------------------------------
-# 5. Generic element collector
+# 5. Element collection
 # --------------------------------------------------
 
 def collect_elements(document, category):
@@ -143,7 +145,7 @@ def collect_elements(document, category):
 
 
 # --------------------------------------------------
-# 6. Parameter extraction
+# 6. Quantity extraction
 # --------------------------------------------------
 
 def get_quantity(element, field):
@@ -227,8 +229,6 @@ def get_family_name(element_type):
 
 def resolve_level(document, level_id):
 
-    """Return a Level object from a valid ElementId."""
-
     if level_id is None:
         return None
 
@@ -244,8 +244,6 @@ def resolve_level(document, level_id):
 
 
 def get_level_from_parameter(element, document, parameter_name):
-
-    """Resolve a level using a built-in parameter."""
 
     parameter_id = getattr(
         DB.BuiltInParameter,
@@ -275,11 +273,7 @@ def get_level_from_parameter(element, document, parameter_name):
 
 def get_element_level(element, document, category_name):
 
-    """Resolve the associated or base level."""
-
     candidates = LEVEL_CONFIG.get(category_name, [])
-
-    # Try category-specific level parameters first.
 
     for parameter_name, source in candidates:
 
@@ -298,8 +292,6 @@ def get_element_level(element, document, category_name):
                 "level_status": "RESOLVED"
             }
 
-    # Fall back to the general LevelId property.
-
     level = resolve_level(
         document,
         element.LevelId
@@ -313,8 +305,6 @@ def get_element_level(element, document, category_name):
             "level_source": "Element.LevelId",
             "level_status": "RESOLVED"
         }
-
-    # Do not assign an estimated level.
 
     return {
         "level": None,
@@ -364,31 +354,30 @@ def extract_element_data(element, document, category_name):
         "type_id": type_id.Value,
         "count": 1,
         "wall_kind": "",
-        "length_m": None,
-        "area_m2": None,
-        "volume_m3": None,
-        "width_mm": None,
-        "height_mm": None,
         "volume_status": "N/A",
         "quantity_status": "OK",
-        "missing_fields": []
+        "missing_fields": [],
+        "required_fields": []
     }
 
-    # Add level information to the element record.
+    # Initialize all quantity fields.
 
-    level_data = get_element_level(
-        element,
-        document,
-        category_name
+    for field in QUANTITY_CONFIG:
+        record[field] = None
+
+    record.update(
+        get_element_level(
+            element,
+            document,
+            category_name
+        )
     )
-
-    record.update(level_data)
 
     required_fields = list(
         CATEGORY_CONFIG[category_name]["quantities"]
     )
 
-    # Apply wall-specific extraction rules.
+    # Apply wall-specific rules.
 
     if category_name == "Walls":
 
@@ -407,10 +396,11 @@ def extract_element_data(element, document, category_name):
             return record
 
         if wall_kind == "Curtain":
-
             required_fields.remove("volume_m3")
 
-    # Extract required quantities.
+    record["required_fields"] = required_fields
+
+    # Extract category-specific quantities.
 
     for field in required_fields:
 
@@ -444,13 +434,9 @@ def extract_element_data(element, document, category_name):
     return record
 
 
-# --------------------------------------------------
-# 11. Extract selected categories
-# --------------------------------------------------
-
 def extract_selected_categories(document, selected_categories):
 
-    all_records = []
+    records = []
 
     for category_name in selected_categories:
 
@@ -469,24 +455,185 @@ def extract_selected_categories(document, selected_categories):
                 category_name
             )
 
-            all_records.append(record)
+            records.append(record)
 
-    return all_records
+    return records
 
 
 # --------------------------------------------------
-# 12. Format report quantities
+# 11. Aggregation engine
 # --------------------------------------------------
 
-def format_quantity(record, field):
+def create_quantity_summary():
+    """Initialize an independent quantity accumulator."""
+
+    return {
+        "expected_count": 0,
+        "valid_count": 0,
+        "sum": 0.0,
+        "min": None,
+        "max": None
+    }
+
+
+def aggregate_quantity(summary, record, field):
+    """Accumulate valid and applicable quantities."""
+
+    if field not in record["required_fields"]:
+        return
+
+    summary["expected_count"] += 1
 
     value = record[field]
+
+    if value is None:
+        return
+
+    summary["valid_count"] += 1
+    summary["sum"] += value
+
+    if summary["min"] is None or value < summary["min"]:
+        summary["min"] = value
+
+    if summary["max"] is None or value > summary["max"]:
+        summary["max"] = value
+
+
+def group_records(records):
+    """Group supported elements by category, level and type."""
+
+    groups = {}
+
+    for record in records:
+
+        if record["quantity_status"] == "UNSUPPORTED":
+            continue
+
+        type_key = record["type_id"]
+
+        # Avoid merging elements with unresolved type IDs.
+
+        if type_key <= 0:
+            type_key = record["element_id"]
+
+        key = (
+            record["category"],
+            record["level_id"],
+            record["family"],
+            record["type_id"],
+            type_key,
+            record["wall_kind"]
+        )
+
+        if key not in groups:
+
+            groups[key] = {
+                "category": record["category"],
+                "level": record["level"],
+                "level_id": record["level_id"],
+                "family": record["family"],
+                "type_name": record["type_name"],
+                "type_id": record["type_id"],
+                "wall_kind": record["wall_kind"],
+                "count": 0,
+                "review_count": 0,
+                "quantities": {},
+                "element_ids": []
+            }
+
+            for field in QUANTITY_CONFIG:
+
+                groups[key]["quantities"][field] = (
+                    create_quantity_summary()
+                )
+
+        group = groups[key]
+
+        group["count"] += record["count"]
+
+        group["element_ids"].append(
+            record["element_id"]
+        )
+
+        if record["quantity_status"] == "REVIEW":
+            group["review_count"] += 1
+
+        for field in QUANTITY_CONFIG:
+
+            aggregate_quantity(
+                group["quantities"][field],
+                record,
+                field
+            )
+
+    return sorted(
+        groups.values(),
+        key=lambda group: (
+            group["category"],
+            group["level"] or "",
+            group["family"],
+            group["type_name"],
+            group["type_id"]
+        )
+    )
+
+
+# --------------------------------------------------
+# 12. Aggregation formatting
+# --------------------------------------------------
+
+def format_aggregated_quantity(summary, field):
+
+    expected = summary["expected_count"]
+    valid = summary["valid_count"]
+
+    if expected == 0:
+        return "N/A"
+
+    if valid == 0:
+        return "Missing"
+
+    aggregation = QUANTITY_CONFIG[field]["aggregation"]
+
+    if aggregation == "SUM":
+
+        text = "{:.2f}".format(summary["sum"])
+
+    else:
+
+        minimum = summary["min"]
+        maximum = summary["max"]
+
+        if abs(maximum - minimum) < 0.000001:
+
+            text = "{:.2f}".format(minimum)
+
+        else:
+
+            text = "{:.2f} - {:.2f}".format(
+                minimum,
+                maximum
+            )
+
+    if valid < expected:
+
+        text += " (Partial: {}/{})".format(
+            valid,
+            expected
+        )
+
+    return text
+
+
+def format_quantity(record, field):
 
     if record["quantity_status"] == "UNSUPPORTED":
         return "Excluded"
 
     if field in record["missing_fields"]:
         return "Missing"
+
+    value = record[field]
 
     if value is None:
         return "N/A"
@@ -495,96 +642,12 @@ def format_quantity(record, field):
 
 
 # --------------------------------------------------
-# 13. Level summary
+# 13. Extraction summary
 # --------------------------------------------------
 
-def generate_level_summary(records):
-
-    level_groups = {}
-
-    for record in records:
-
-        key = (
-            record["level_id"],
-            record["category"]
-        )
-
-        if key not in level_groups:
-
-            level_groups[key] = {
-                "level": record["level"] or "Unresolved",
-                "category": record["category"],
-                "count": 0
-            }
-
-        level_groups[key]["count"] += 1
+def generate_extraction_summary(records, selected_categories):
 
     rows = []
-
-    groups = sorted(
-        level_groups.values(),
-        key=lambda group: (
-            group["level"],
-            group["category"]
-        )
-    )
-
-    for group in groups:
-
-        rows.append([
-            group["level"],
-            group["category"],
-            group["count"]
-        ])
-
-    if rows:
-
-        output.print_table(
-            table_data=rows,
-            columns=[
-                "Associated Level",
-                "Category",
-                "Collected Instances"
-            ],
-            title="Elements by Level"
-        )
-
-
-# --------------------------------------------------
-# 14. Generate report
-# --------------------------------------------------
-
-def generate_report(document, records, selected_categories):
-
-    output.print_md("# BIM Quantity Extractor")
-    output.print_md("## Multi-Category Quantity Report")
-
-    output.print_md(
-        "**Model:** {}".format(document.Title)
-    )
-
-    output.print_md(
-        "**Total collected elements:** {}".format(
-            len(records)
-        )
-    )
-
-    resolved_count = sum(
-        1 for record in records
-        if record["level_status"] == "RESOLVED"
-    )
-
-    unresolved_count = len(records) - resolved_count
-
-    output.print_md(
-        "**Levels resolved:** {}".format(resolved_count)
-    )
-
-    output.print_md(
-        "**Levels unresolved:** {}".format(unresolved_count)
-    )
-
-    summary_rows = []
 
     for category_name in CATEGORY_ORDER:
 
@@ -611,22 +674,22 @@ def generate_report(document, records, selected_categories):
             if record["quantity_status"] == "UNSUPPORTED"
         )
 
-        unresolved = sum(
+        unresolved_count = sum(
             1 for record in category_records
             if record["level_status"] == "UNRESOLVED"
         )
 
-        summary_rows.append([
+        rows.append([
             category_name,
             len(category_records),
             ok_count,
             review_count,
             unsupported_count,
-            unresolved
+            unresolved_count
         ])
 
     output.print_table(
-        table_data=summary_rows,
+        table_data=rows,
         columns=[
             "Category",
             "Collected",
@@ -638,9 +701,197 @@ def generate_report(document, records, selected_categories):
         title="Extraction Summary"
     )
 
-    generate_level_summary(records)
 
-    # Display individual quantities by category.
+# --------------------------------------------------
+# 14. Level summary
+# --------------------------------------------------
+
+def generate_level_summary(records):
+
+    level_groups = {}
+
+    for record in records:
+
+        key = (
+            record["level_id"],
+            record["category"]
+        )
+
+        if key not in level_groups:
+
+            level_groups[key] = {
+                "level": record["level"] or "Unresolved",
+                "category": record["category"],
+                "count": 0
+            }
+
+        level_groups[key]["count"] += 1
+
+    groups = sorted(
+        level_groups.values(),
+        key=lambda group: (
+            group["level"],
+            group["category"]
+        )
+    )
+
+    rows = [
+        [
+            group["level"],
+            group["category"],
+            group["count"]
+        ]
+        for group in groups
+    ]
+
+    if rows:
+
+        output.print_table(
+            table_data=rows,
+            columns=[
+                "Associated Level",
+                "Category",
+                "Collected Instances"
+            ],
+            title="Elements by Level"
+        )
+
+
+# --------------------------------------------------
+# 15. Aggregated quantity report
+# --------------------------------------------------
+
+def generate_aggregation_report(groups, selected_categories):
+
+    output.print_md("# Aggregated Quantity Takeoff")
+
+    for category_name in CATEGORY_ORDER:
+
+        if category_name not in selected_categories:
+            continue
+
+        category_groups = [
+            group for group in groups
+            if group["category"] == category_name
+        ]
+
+        output.print_md(
+            "## {}".format(category_name)
+        )
+
+        if not category_groups:
+
+            output.print_md(
+                "No supported elements found."
+            )
+
+            continue
+
+        fields = CATEGORY_CONFIG[category_name]["quantities"]
+
+        columns = [
+            "Level",
+            "Family",
+            "Type",
+            "Count"
+        ]
+
+        if category_name == "Walls":
+            columns.append("Wall Kind")
+
+        columns.extend([
+            QUANTITY_CONFIG[field]["label"]
+            for field in fields
+        ])
+
+        columns.append("Review")
+
+        rows = []
+
+        for group in category_groups:
+
+            row = [
+                group["level"] or "Unresolved",
+                group["family"],
+                group["type_name"],
+                group["count"]
+            ]
+
+            if category_name == "Walls":
+                row.append(group["wall_kind"])
+
+            for field in fields:
+
+                summary = group["quantities"][field]
+
+                row.append(
+                    format_aggregated_quantity(
+                        summary,
+                        field
+                    )
+                )
+
+            row.append(group["review_count"])
+
+            rows.append(row)
+
+        output.print_table(
+            table_data=rows,
+            columns=columns
+        )
+
+        # Add category-level quantity totals.
+
+        total_count = sum(
+            group["count"]
+            for group in category_groups
+        )
+
+        output.print_md(
+            "**Supported instances:** {}".format(
+                total_count
+            )
+        )
+
+        for field in fields:
+
+            if QUANTITY_CONFIG[field]["aggregation"] != "SUM":
+                continue
+
+            summary = create_quantity_summary()
+
+            for group in category_groups:
+
+                quantity = group["quantities"][field]
+
+                summary["sum"] += quantity["sum"]
+
+                summary["expected_count"] += (
+                    quantity["expected_count"]
+                )
+
+                summary["valid_count"] += (
+                    quantity["valid_count"]
+                )
+
+            output.print_md(
+                "**Total {}:** {}".format(
+                    QUANTITY_CONFIG[field]["label"],
+                    format_aggregated_quantity(
+                        summary,
+                        field
+                    )
+                )
+            )
+
+
+# --------------------------------------------------
+# 16. Detailed element report
+# --------------------------------------------------
+
+def generate_detail_report(records, selected_categories):
+
+    output.print_md("# Detailed Element Quantities")
 
     for category_name in CATEGORY_ORDER:
 
@@ -674,7 +925,7 @@ def generate_report(document, records, selected_categories):
             columns.append("Wall Kind")
 
         columns.extend([
-            QUANTITY_LABELS[field]
+            QUANTITY_CONFIG[field]["label"]
             for field in fields
         ])
 
@@ -709,7 +960,180 @@ def generate_report(document, records, selected_categories):
             columns=columns
         )
 
-    # Report missing quantities.
+
+# --------------------------------------------------
+# 17. Validation report
+# --------------------------------------------------
+
+def generate_validation_report(records, groups):
+
+    output.print_md("# Validation Report")
+
+    supported_count = sum(
+        1 for record in records
+        if record["quantity_status"] != "UNSUPPORTED"
+    )
+
+    grouped_count = sum(
+        group["count"]
+        for group in groups
+    )
+
+    unsupported_count = len(records) - supported_count
+
+    unique_ids = set(
+        record["element_id"]
+        for record in records
+    )
+
+    count_match = supported_count == grouped_count
+
+    unique_match = len(unique_ids) == len(records)
+
+    reconciliation_rows = [
+        [
+            "Collected instances",
+            len(records),
+            "INFO"
+        ],
+        [
+            "Unsupported instances",
+            unsupported_count,
+            "INFO"
+        ],
+        [
+            "Supported instances",
+            supported_count,
+            "INFO"
+        ],
+        [
+            "Grouped instances",
+            grouped_count,
+            "PASS" if count_match else "FAIL"
+        ],
+        [
+            "Unique element IDs",
+            len(unique_ids),
+            "PASS" if unique_match else "FAIL"
+        ]
+    ]
+
+    output.print_table(
+        table_data=reconciliation_rows,
+        columns=["Check", "Count", "Status"],
+        title="Count Reconciliation"
+    )
+
+    # Reconcile raw and aggregated quantities.
+
+    quantity_rows = []
+
+    for category_name in CATEGORY_ORDER:
+
+        category_records = [
+            record for record in records
+            if record["category"] == category_name
+            and record["quantity_status"] != "UNSUPPORTED"
+        ]
+
+        if not category_records:
+            continue
+
+        category_groups = [
+            group for group in groups
+            if group["category"] == category_name
+        ]
+
+        fields = CATEGORY_CONFIG[category_name]["quantities"]
+
+        for field in fields:
+
+            if QUANTITY_CONFIG[field]["aggregation"] != "SUM":
+                continue
+
+            raw_values = [
+                record[field]
+                for record in category_records
+                if field in record["required_fields"]
+                and record[field] is not None
+            ]
+
+            expected_count = sum(
+                1 for record in category_records
+                if field in record["required_fields"]
+            )
+
+            if expected_count == 0:
+                continue
+
+            group_total = sum(
+                group["quantities"][field]["sum"]
+                for group in category_groups
+            )
+
+            group_valid = sum(
+                group["quantities"][field]["valid_count"]
+                for group in category_groups
+            )
+
+            group_expected = sum(
+                group["quantities"][field]["expected_count"]
+                for group in category_groups
+            )
+
+            raw_total = sum(raw_values)
+
+            tolerance = max(
+                0.000001,
+                abs(raw_total) * 0.000000001
+            )
+
+            matches = (
+                abs(raw_total - group_total) <= tolerance
+                and len(raw_values) == group_valid
+                and expected_count == group_expected
+            )
+
+            if not matches:
+                status = "FAIL"
+
+            elif not raw_values:
+                status = "NO DATA"
+
+            elif len(raw_values) < expected_count:
+                status = "PASS (Partial)"
+
+            else:
+                status = "PASS"
+
+            quantity_rows.append([
+                category_name,
+                QUANTITY_CONFIG[field]["label"],
+                "{:.4f}".format(raw_total)
+                if raw_values else "Missing",
+                "{:.4f}".format(group_total)
+                if group_valid else "Missing",
+                "{}/{}".format(
+                    len(raw_values),
+                    expected_count
+                ),
+                status
+            ])
+
+    if quantity_rows:
+
+        output.print_table(
+            table_data=quantity_rows,
+            columns=[
+                "Category",
+                "Quantity",
+                "Raw Total",
+                "Grouped Total",
+                "Valid / Expected",
+                "Status"
+            ],
+            title="Quantity Reconciliation"
+        )
 
     output.print_md("## Elements Requiring Quantity Review")
 
@@ -724,91 +1148,182 @@ def generate_report(document, records, selected_categories):
             "No missing required quantities found."
         )
 
-    else:
+    for record in review_records:
 
-        for record in review_records:
+        element_link = output.linkify(
+            DB.ElementId(record["element_id"])
+        )
 
-            element_link = output.linkify(
-                DB.ElementId(record["element_id"])
+        missing = [
+            QUANTITY_CONFIG[field]["label"]
+            for field in record["missing_fields"]
+        ]
+
+        output.print_md(
+            "- {} | {} | Missing: {}".format(
+                record["category"],
+                element_link,
+                ", ".join(missing)
             )
-
-            missing = [
-                QUANTITY_LABELS[field]
-                for field in record["missing_fields"]
-            ]
-
-            output.print_md(
-                "- {} | {} | Missing: {}".format(
-                    record["category"],
-                    element_link,
-                    ", ".join(missing)
-                )
-            )
-
-    # Report unresolved levels.
+        )
 
     output.print_md("## Unresolved Levels")
 
-    if unresolved_count == 0:
+    unresolved_records = [
+        record for record in records
+        if record["level_status"] == "UNRESOLVED"
+    ]
+
+    if not unresolved_records:
 
         output.print_md(
             "All collected elements have a resolved level."
         )
 
-    else:
+    for record in unresolved_records:
 
-        for record in records:
+        element_link = output.linkify(
+            DB.ElementId(record["element_id"])
+        )
 
-            if record["level_status"] != "UNRESOLVED":
-                continue
-
-            element_link = output.linkify(
-                DB.ElementId(record["element_id"])
+        output.print_md(
+            "- {} | {} | {}".format(
+                record["category"],
+                element_link,
+                record["type_name"]
             )
+        )
 
-            output.print_md(
-                "- {} | {} | {}".format(
-                    record["category"],
-                    element_link,
-                    record["type_name"]
-                )
+    output.print_md("## Unsupported Elements")
+
+    unsupported_records = [
+        record for record in records
+        if record["quantity_status"] == "UNSUPPORTED"
+    ]
+
+    if not unsupported_records:
+
+        output.print_md(
+            "No unsupported elements found."
+        )
+
+    for record in unsupported_records:
+
+        element_link = output.linkify(
+            DB.ElementId(record["element_id"])
+        )
+
+        output.print_md(
+            "- {} | {} | {}".format(
+                record["category"],
+                element_link,
+                record["type_name"]
             )
-
-    output.print_md("## Extraction Notes")
-
-    output.print_md(
-        "- Levels represent associated or base levels."
-    )
-
-    output.print_md(
-        "- Multi-level elements are not split by floor."
-    )
-
-    output.print_md(
-        "- Level counts include all collected instances."
-    )
-
-    output.print_md(
-        "- Unresolved levels are not estimated."
-    )
-
-    output.print_md(
-        "- Unsupported elements are excluded "
-        "from physical quantity extraction."
-    )
-
-    output.print_md(
-        "- N/A means the quantity is outside "
-        "the current extraction scope."
-    )
-
-    output.print_md(
-        "- No model elements have been modified."
-    )
+        )
 
 
 # --------------------------------------------------
-# 15. Main workflow
+# 18. Main report
+# --------------------------------------------------
+
+def generate_report(document, records, groups, selected_categories):
+
+    output.print_md("# BIM Quantity Extractor")
+    output.print_md("## Multi-Category Quantity Takeoff")
+
+    output.print_md(
+        "**Model:** {}".format(document.Title)
+    )
+
+    output.print_md(
+        "**Total collected elements:** {}".format(
+            len(records)
+        )
+    )
+
+    output.print_md(
+        "**Quantity groups:** {}".format(
+            len(groups)
+        )
+    )
+
+    resolved_count = sum(
+        1 for record in records
+        if record["level_status"] == "RESOLVED"
+    )
+
+    output.print_md(
+        "**Levels resolved:** {}".format(
+            resolved_count
+        )
+    )
+
+    output.print_md(
+        "**Levels unresolved:** {}".format(
+            len(records) - resolved_count
+        )
+    )
+
+    generate_extraction_summary(
+        records,
+        selected_categories
+    )
+
+    generate_level_summary(records)
+
+    generate_aggregation_report(
+        groups,
+        selected_categories
+    )
+
+    generate_validation_report(
+        records,
+        groups
+    )
+
+    generate_detail_report(
+        records,
+        selected_categories
+    )
+
+    output.print_md("## Extraction Notes")
+
+    notes = [
+        "Quantities are grouped by category, associated "
+        "level, family and type identity.",
+
+        "Length, area and volume are summed.",
+
+        "Width and height are displayed as values "
+        "or ranges, not summed.",
+
+        "Curtain Wall volume is outside the current scope.",
+
+        "Unsupported elements are excluded from totals.",
+
+        "Missing quantities are not treated as zero.",
+
+        "Partial totals contain available values only.",
+
+        "Multi-level elements are not split by floor.",
+
+        "Internal reconciliation does not replace "
+        "validation against native Revit schedules.",
+
+        "Linked models are outside the current scope.",
+
+        "No model elements have been modified."
+    ]
+
+    for note in notes:
+
+        output.print_md(
+            "- {}".format(note)
+        )
+
+
+# --------------------------------------------------
+# 19. Main workflow
 # --------------------------------------------------
 
 def main():
@@ -841,9 +1356,12 @@ def main():
         )
     )
 
+    groups = group_records(records)
+
     generate_report(
         doc,
         records,
+        groups,
         selected_categories
     )
 
