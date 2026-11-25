@@ -1,7 +1,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""BIM Quantity Extractor - Multi-Category Extraction."""
+"""BIM Quantity Extractor - Multi-Category and Level Identification."""
 
 import math
 
@@ -75,14 +75,6 @@ CATEGORY_ORDER = [
     "Structural Columns"
 ]
 
-QUANTITY_FIELDS = [
-    "length_m",
-    "area_m2",
-    "volume_m3",
-    "width_mm",
-    "height_mm"
-]
-
 QUANTITY_LABELS = {
     "length_m": "Length (m)",
     "area_m2": "Area (m2)",
@@ -93,7 +85,33 @@ QUANTITY_LABELS = {
 
 
 # --------------------------------------------------
-# 3. Category selection
+# 3. Level configuration
+# --------------------------------------------------
+
+LEVEL_CONFIG = {
+    "Walls": [
+        ("WALL_BASE_CONSTRAINT", "Base Constraint")
+    ],
+    "Floors": [
+        ("LEVEL_PARAM", "Level Parameter")
+    ],
+    "Doors": [
+        ("FAMILY_LEVEL_PARAM", "Family Level"),
+        ("INSTANCE_REFERENCE_LEVEL_PARAM", "Reference Level")
+    ],
+    "Windows": [
+        ("FAMILY_LEVEL_PARAM", "Family Level"),
+        ("INSTANCE_REFERENCE_LEVEL_PARAM", "Reference Level")
+    ],
+    "Structural Columns": [
+        ("FAMILY_BASE_LEVEL_PARAM", "Base Level"),
+        ("FAMILY_LEVEL_PARAM", "Family Level")
+    ]
+}
+
+
+# --------------------------------------------------
+# 4. Category selection
 # --------------------------------------------------
 
 def select_categories():
@@ -111,7 +129,7 @@ def select_categories():
 
 
 # --------------------------------------------------
-# 4. Generic element collector
+# 5. Generic element collector
 # --------------------------------------------------
 
 def collect_elements(document, category):
@@ -125,7 +143,7 @@ def collect_elements(document, category):
 
 
 # --------------------------------------------------
-# 5. Parameter extraction
+# 6. Parameter extraction
 # --------------------------------------------------
 
 def get_quantity(element, field):
@@ -164,8 +182,6 @@ def get_quantity(element, field):
 
 def get_dimension(element, element_type, field):
 
-    # Prefer type dimensions, with instance fallback.
-
     value = get_quantity(element_type, field)
 
     if value is None:
@@ -175,7 +191,7 @@ def get_dimension(element, element_type, field):
 
 
 # --------------------------------------------------
-# 6. Element identity
+# 7. Element identity
 # --------------------------------------------------
 
 def get_type_name(element_type):
@@ -206,7 +222,110 @@ def get_family_name(element_type):
 
 
 # --------------------------------------------------
-# 7. Wall classification
+# 8. Level identification
+# --------------------------------------------------
+
+def resolve_level(document, level_id):
+
+    """Return a Level object from a valid ElementId."""
+
+    if level_id is None:
+        return None
+
+    if level_id == DB.ElementId.InvalidElementId:
+        return None
+
+    level = document.GetElement(level_id)
+
+    if isinstance(level, DB.Level):
+        return level
+
+    return None
+
+
+def get_level_from_parameter(element, document, parameter_name):
+
+    """Resolve a level using a built-in parameter."""
+
+    parameter_id = getattr(
+        DB.BuiltInParameter,
+        parameter_name,
+        None
+    )
+
+    if parameter_id is None:
+        return None
+
+    parameter = element.get_Parameter(parameter_id)
+
+    if parameter is None:
+        return None
+
+    if not parameter.HasValue:
+        return None
+
+    if parameter.StorageType != DB.StorageType.ElementId:
+        return None
+
+    return resolve_level(
+        document,
+        parameter.AsElementId()
+    )
+
+
+def get_element_level(element, document, category_name):
+
+    """Resolve the associated or base level."""
+
+    candidates = LEVEL_CONFIG.get(category_name, [])
+
+    # Try category-specific level parameters first.
+
+    for parameter_name, source in candidates:
+
+        level = get_level_from_parameter(
+            element,
+            document,
+            parameter_name
+        )
+
+        if level is not None:
+
+            return {
+                "level": level.Name,
+                "level_id": level.Id.Value,
+                "level_source": source,
+                "level_status": "RESOLVED"
+            }
+
+    # Fall back to the general LevelId property.
+
+    level = resolve_level(
+        document,
+        element.LevelId
+    )
+
+    if level is not None:
+
+        return {
+            "level": level.Name,
+            "level_id": level.Id.Value,
+            "level_source": "Element.LevelId",
+            "level_status": "RESOLVED"
+        }
+
+    # Do not assign an estimated level.
+
+    return {
+        "level": None,
+        "level_id": None,
+        "level_source": "",
+        "level_status": "UNRESOLVED"
+    }
+
+
+# --------------------------------------------------
+# 9. Wall classification
 # --------------------------------------------------
 
 def get_wall_kind(element_type):
@@ -227,7 +346,7 @@ def get_wall_kind(element_type):
 
 
 # --------------------------------------------------
-# 8. Generic element extraction
+# 10. Generic element extraction
 # --------------------------------------------------
 
 def extract_element_data(element, document, category_name):
@@ -254,6 +373,16 @@ def extract_element_data(element, document, category_name):
         "quantity_status": "OK",
         "missing_fields": []
     }
+
+    # Add level information to the element record.
+
+    level_data = get_element_level(
+        element,
+        document,
+        category_name
+    )
+
+    record.update(level_data)
 
     required_fields = list(
         CATEGORY_CONFIG[category_name]["quantities"]
@@ -316,7 +445,7 @@ def extract_element_data(element, document, category_name):
 
 
 # --------------------------------------------------
-# 9. Extract selected categories
+# 11. Extract selected categories
 # --------------------------------------------------
 
 def extract_selected_categories(document, selected_categories):
@@ -346,7 +475,7 @@ def extract_selected_categories(document, selected_categories):
 
 
 # --------------------------------------------------
-# 10. Format report quantities
+# 12. Format report quantities
 # --------------------------------------------------
 
 def format_quantity(record, field):
@@ -366,7 +495,63 @@ def format_quantity(record, field):
 
 
 # --------------------------------------------------
-# 11. Generate report
+# 13. Level summary
+# --------------------------------------------------
+
+def generate_level_summary(records):
+
+    level_groups = {}
+
+    for record in records:
+
+        key = (
+            record["level_id"],
+            record["category"]
+        )
+
+        if key not in level_groups:
+
+            level_groups[key] = {
+                "level": record["level"] or "Unresolved",
+                "category": record["category"],
+                "count": 0
+            }
+
+        level_groups[key]["count"] += 1
+
+    rows = []
+
+    groups = sorted(
+        level_groups.values(),
+        key=lambda group: (
+            group["level"],
+            group["category"]
+        )
+    )
+
+    for group in groups:
+
+        rows.append([
+            group["level"],
+            group["category"],
+            group["count"]
+        ])
+
+    if rows:
+
+        output.print_table(
+            table_data=rows,
+            columns=[
+                "Associated Level",
+                "Category",
+                "Collected Instances"
+            ],
+            title="Elements by Level"
+        )
+
+
+# --------------------------------------------------
+# 14. Generate report
 # --------------------------------------------------
 
 def generate_report(document, records, selected_categories):
@@ -382,6 +567,21 @@ def generate_report(document, records, selected_categories):
         "**Total collected elements:** {}".format(
             len(records)
         )
+    )
+
+    resolved_count = sum(
+        1 for record in records
+        if record["level_status"] == "RESOLVED"
+    )
+
+    unresolved_count = len(records) - resolved_count
+
+    output.print_md(
+        "**Levels resolved:** {}".format(resolved_count)
+    )
+
+    output.print_md(
+        "**Levels unresolved:** {}".format(unresolved_count)
     )
 
     summary_rows = []
@@ -411,12 +611,18 @@ def generate_report(document, records, selected_categories):
             if record["quantity_status"] == "UNSUPPORTED"
         )
 
+        unresolved = sum(
+            1 for record in category_records
+            if record["level_status"] == "UNRESOLVED"
+        )
+
         summary_rows.append([
             category_name,
             len(category_records),
             ok_count,
             review_count,
-            unsupported_count
+            unsupported_count,
+            unresolved
         ])
 
     output.print_table(
@@ -426,10 +632,13 @@ def generate_report(document, records, selected_categories):
             "Collected",
             "OK",
             "Review",
-            "Unsupported"
+            "Unsupported",
+            "Unresolved Levels"
         ],
         title="Extraction Summary"
     )
+
+    generate_level_summary(records)
 
     # Display individual quantities by category.
 
@@ -457,7 +666,8 @@ def generate_report(document, records, selected_categories):
         columns = [
             "Element ID",
             "Family",
-            "Type"
+            "Type",
+            "Level"
         ]
 
         if category_name == "Walls":
@@ -477,7 +687,8 @@ def generate_report(document, records, selected_categories):
             row = [
                 str(record["element_id"]),
                 record["family"],
-                record["type_name"]
+                record["type_name"],
+                record["level"] or "Unresolved"
             ]
 
             if category_name == "Walls":
@@ -498,7 +709,9 @@ def generate_report(document, records, selected_categories):
             columns=columns
         )
 
-    output.print_md("## Elements Requiring Review")
+    # Report missing quantities.
+
+    output.print_md("## Elements Requiring Quantity Review")
 
     review_records = [
         record for record in records
@@ -532,21 +745,61 @@ def generate_report(document, records, selected_categories):
                 )
             )
 
+    # Report unresolved levels.
+
+    output.print_md("## Unresolved Levels")
+
+    if unresolved_count == 0:
+
+        output.print_md(
+            "All collected elements have a resolved level."
+        )
+
+    else:
+
+        for record in records:
+
+            if record["level_status"] != "UNRESOLVED":
+                continue
+
+            element_link = output.linkify(
+                DB.ElementId(record["element_id"])
+            )
+
+            output.print_md(
+                "- {} | {} | {}".format(
+                    record["category"],
+                    element_link,
+                    record["type_name"]
+                )
+            )
+
     output.print_md("## Extraction Notes")
 
     output.print_md(
-        "- N/A means the quantity is outside "
-        "the current extraction scope."
+        "- Levels represent associated or base levels."
+    )
+
+    output.print_md(
+        "- Multi-level elements are not split by floor."
+    )
+
+    output.print_md(
+        "- Level counts include all collected instances."
+    )
+
+    output.print_md(
+        "- Unresolved levels are not estimated."
     )
 
     output.print_md(
         "- Unsupported elements are excluded "
-        "from quantity extraction."
+        "from physical quantity extraction."
     )
 
     output.print_md(
-        "- Dimensions are read from element types "
-        "with instance fallback."
+        "- N/A means the quantity is outside "
+        "the current extraction scope."
     )
 
     output.print_md(
@@ -555,7 +808,7 @@ def generate_report(document, records, selected_categories):
 
 
 # --------------------------------------------------
-# 12. Main workflow
+# 15. Main workflow
 # --------------------------------------------------
 
 def main():
@@ -582,6 +835,7 @@ def main():
     records.sort(
         key=lambda record: (
             record["category"],
+            record["level"] or "",
             record["type_name"],
             record["element_id"]
         )
